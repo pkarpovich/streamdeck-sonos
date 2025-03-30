@@ -41,7 +41,6 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
       );
     }
 
-    // Update the button state every 5 seconds to reflect changes made outside the plugin
     this.updateInterval = setInterval(async () => {
       const { error: refreshError } = await tryCatch(
         this.updateButtonState(ev.action as KeyAction<SonosSettings>),
