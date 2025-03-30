@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*' # Will trigger on any tag that starts with 'v', like v1.0.0
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -77,3 +80,5 @@ jobs:
             - Adjust volume using a dial
             - Skip to next/previous track
             - Toggle shuffle mode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
