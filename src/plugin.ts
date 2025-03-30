@@ -5,7 +5,7 @@ import { SonosVolumeAction } from "./actions/sonos-volume-dial";
 import { SonosPreviousTrackAction } from "./actions/sonos-prev-track";
 import { SonosNextTrackAction } from "./actions/sonos-next-track";
 
-streamDeck.logger.setLevel(LogLevel.TRACE);
+streamDeck.logger.setLevel(LogLevel.WARN);
 
 streamDeck.actions.registerAction(new SonosPlayPauseAction());
 streamDeck.actions.registerAction(new SonosVolumeAction());

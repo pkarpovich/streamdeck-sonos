@@ -2,6 +2,15 @@ import { SonosManager, SonosDevice } from "@svrooij/sonos";
 import type { Track } from "@svrooij/sonos/lib/models";
 import streamDeck from "@elgato/streamdeck";
 import { tryCatch } from "../utils/tryCatch";
+import { getImageAsBase64 } from "../utils/image";
+
+export type CurrentPlaying = {
+  id?: string;
+  artist?: string;
+  album?: string;
+  track?: string;
+  cover?: string;
+};
 
 export class SonosService {
   private manager?: SonosManager;
@@ -192,15 +201,27 @@ export class SonosService {
     return result.CurrentMute;
   }
 
-  public async getTrackCover(): Promise<string | undefined> {
-    if (!this.device) return "";
+  public async getCurrentPlaying(): Promise<CurrentPlaying | null> {
+    if (!this.device) return null;
     const { data: state, error: stateError } = await tryCatch(
       this.device.GetState(),
     );
     if (stateError || !state) {
-      streamDeck.logger.error(`Failed to get track cover: ${stateError}`);
-      return "";
+      streamDeck.logger.error(`Failed to get current playing: ${stateError}`);
+      return null;
     }
-    return (state.positionInfo.TrackMetaData as Track).AlbumArtUri;
+
+    const metadata = state.positionInfo.TrackMetaData as Track;
+    if (!metadata) return null;
+
+    return {
+      id: metadata.TrackUri,
+      artist: metadata.Artist,
+      album: metadata.Album,
+      track: metadata.Title,
+      cover: metadata.AlbumArtUri
+        ? await getImageAsBase64(metadata.AlbumArtUri)
+        : "",
+    };
   }
 }

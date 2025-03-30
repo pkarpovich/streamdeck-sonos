@@ -53,7 +53,7 @@
     {
       "Name": "Volume Control",
       "UUID": "com.pavel-karpovich.sonos.volume",
-      "Icon": "imgs/actions/volume/volume_action",
+      "Icon": "imgs/actions/volume/speaker_icon",
       "Tooltip": "Control Sonos volume",
       "Controllers": ["Encoder"],
       "Encoder": {
@@ -67,9 +67,10 @@
       },
       "States": [
         {
-          "Image": "imgs/actions/volume/volume_action",
-          "Name": "Volume",
-          "TitleAlignment": "middle"
+          "Image": "imgs/actions/volume/speaker_icon"
+        },
+        {
+          "Image": "imgs/actions/volume/mute_icon"
         }
       ]
     }

@@ -1,11 +1,12 @@
 import {
   action,
-  DialDownEvent,
-  DialRotateEvent,
-  DialUpEvent,
   SingletonAction,
-  TouchTapEvent,
-  WillAppearEvent,
+  type DialDownEvent,
+  type DialRotateEvent,
+  type DialUpEvent,
+  type TouchTapEvent,
+  type WillAppearEvent,
+  type DialAction,
 } from "@elgato/streamdeck";
 import streamDeck from "@elgato/streamdeck";
 import { SonosService } from "../services/sonos-service";
@@ -142,7 +143,7 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
   }
 
   private async updateDialDisplay(
-    action: any,
+    action: DialAction<SonosVolumeSettings>,
     volumeOverride?: number,
   ): Promise<void> {
     const { data: volume, error: volError } = await tryCatch(
@@ -174,6 +175,9 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
       indicator: {
         value: isMuted ? 0 : volume,
       },
+      icon: isMuted
+        ? "imgs/actions/volume/mute_icon.svg"
+        : "imgs/actions/volume/speaker_icon.svg",
     };
 
     const { error: setFeedbackError } = await tryCatch(

@@ -20,6 +20,7 @@
     },
     "dependencies": {
         "@elgato/streamdeck": "^1.0.0",
-        "@svrooij/sonos": "^2.5.0"
+        "@svrooij/sonos": "^2.5.0",
+        "axios": "^1.8.4"
     }
 }
