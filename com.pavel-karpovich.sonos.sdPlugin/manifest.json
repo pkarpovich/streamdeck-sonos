@@ -73,6 +73,25 @@
           "Image": "imgs/actions/volume/mute_icon"
         }
       ]
+    },
+    {
+      "Name": "Shuffle Toggle",
+      "UUID": "com.pavel-karpovich.sonos.shuffle",
+      "Icon": "imgs/actions/shuffle/shuffle_off_key",
+      "Tooltip": "Toggle Shuffle Mode On/Off",
+      "Controllers": ["Keypad"],
+      "States": [
+        {
+          "Image": "imgs/actions/shuffle/shuffle_off_key",
+          "Name": "Shuffle Off",
+          "TitleAlignment": "middle"
+        },
+        {
+          "Image": "imgs/actions/shuffle/shuffle_on_key",
+          "Name": "Shuffle On",
+          "TitleAlignment": "middle"
+        }
+      ]
     }
   ],
   "Category": "sonos",

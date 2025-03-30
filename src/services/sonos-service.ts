@@ -1,5 +1,5 @@
-import { SonosManager, SonosDevice } from "@svrooij/sonos";
-import type { Track } from "@svrooij/sonos/lib/models";
+import { SonosDevice, SonosManager } from "@svrooij/sonos";
+import { type Track, PlayMode } from "@svrooij/sonos/lib/models";
 import streamDeck from "@elgato/streamdeck";
 import { tryCatch } from "../utils/tryCatch";
 import { getImageAsBase64 } from "../utils/image";
@@ -223,5 +223,71 @@ export class SonosService {
         ? await getImageAsBase64(metadata.AlbumArtUri)
         : "",
     };
+  }
+
+  public async getShuffleMode(): Promise<boolean> {
+    if (!(await this.ensureInitialized())) return false;
+
+    const { data: playModeInfo, error: shuffleError } = await tryCatch(
+      this.device!.AVTransportService.GetTransportSettings({
+        InstanceID: 0,
+      }),
+    );
+
+    if (shuffleError) {
+      streamDeck.logger.error(`Failed to get shuffle state: ${shuffleError}`);
+      return false;
+    }
+
+    // PlayMode can be: "NORMAL", "REPEAT_ALL", "REPEAT_ONE", "SHUFFLE_NOREPEAT", "SHUFFLE", "SHUFFLE_REPEAT_ONE"
+    return playModeInfo.PlayMode.includes("SHUFFLE");
+  }
+
+  public async toggleShuffle(): Promise<boolean> {
+    if (!(await this.ensureInitialized())) return false;
+
+    const { data: currentMode, error: modeError } = await tryCatch(
+      this.device!.AVTransportService.GetTransportSettings({
+        InstanceID: 0,
+      }),
+    );
+
+    if (modeError) {
+      streamDeck.logger.error(`Failed to get current play mode: ${modeError}`);
+      return false;
+    }
+
+    let newMode: PlayMode;
+    const currentPlayMode = currentMode.PlayMode;
+
+    if (currentPlayMode.includes("SHUFFLE")) {
+      newMode = currentPlayMode.includes("REPEAT_ONE")
+        ? PlayMode.RepeatOne
+        : currentPlayMode.includes("REPEAT")
+          ? PlayMode.RepeatAll
+          : PlayMode.Normal;
+    } else {
+      newMode = currentPlayMode.includes("REPEAT_ONE")
+        ? PlayMode.SuffleRepeatOne
+        : currentPlayMode.includes("REPEAT")
+          ? PlayMode.Shuffle
+          : PlayMode.ShuffleNoRepeat;
+    }
+
+    const { error: setPlayModeError } = await tryCatch(
+      this.device!.AVTransportService.SetPlayMode({
+        InstanceID: 0,
+        NewPlayMode: newMode,
+      }),
+    );
+
+    if (setPlayModeError) {
+      streamDeck.logger.error(
+        `Failed to toggle shuffle mode: ${setPlayModeError}`,
+      );
+      return false;
+    }
+
+    return true;
   }
 }
