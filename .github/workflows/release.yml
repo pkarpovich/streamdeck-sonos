@@ -45,29 +45,18 @@ jobs:
       - name: Build plugin
         run: pnpm build
 
-      - name: Prepare plugin for release
-        run: |
-          # Get version from the tag (remove 'v' prefix)
-          VERSION=${GITHUB_REF#refs/tags/v}
-          
-          # Update version in manifest.json
-          jq ".Version = \"$VERSION.0\"" com.pavel-karpovich.sonos.sdPlugin/manifest.json > temp.json && mv temp.json com.pavel-karpovich.sonos.sdPlugin/manifest.json
-          
-          # Create archive directory with the correct structure
-          mkdir -p release
-          
-          # Create the zip file with the .sdPlugin directory
-          cd com.pavel-karpovich.sonos.sdPlugin && zip -r ../release/com.pavel-karpovich.sonos-$VERSION.streamDeckPlugin .
+      - name: Pack
+        uses: neilenns/streamdeck-cli-pack@v1
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          name: Stream Deck Sonos Plugin v${{ github.ref_name }}
+          name: Stream Deck Sonos Plugin ${{ github.ref_name }}
           draft: false
           prerelease: false
           files: |
-            release/*.streamDeckPlugin
+            *.streamDeckPlugin
           body: |
             # Stream Deck Sonos Plugin ${{ github.ref_name }}
             

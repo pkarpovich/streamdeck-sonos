@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@elgato/streamdeck':
-        specifier: ^1.0.0
+        specifier: ^1.3.1
         version: 1.3.1
       '@svrooij/sonos':
         specifier: ^2.5.0
