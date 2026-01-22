@@ -42,11 +42,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Validate plugin manifest
-        run: pnpm validate
-
       - name: Build plugin
         run: pnpm build
+
+      - name: Validate plugin manifest
+        run: pnpm validate
 
       - name: Pack plugin
         uses: neilenns/streamdeck-cli-pack@v1

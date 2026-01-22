@@ -125,7 +125,7 @@
 		}
 	],
 	"Nodejs": {
-		"Version": "24",
+		"Version": "20",
 		"Debug": "enabled"
 	},
 	"UUID": "com.pavel-karpovich.sonos"
