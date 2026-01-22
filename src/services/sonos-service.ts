@@ -3,6 +3,9 @@ import { type Track, PlayMode } from "@svrooij/sonos/lib/models";
 import streamDeck from "@elgato/streamdeck";
 import { tryCatch } from "../utils/tryCatch";
 import { getImageAsBase64 } from "../utils/image";
+import { discoverSonosDevices, type DiscoveredDevice } from "./discovery-service";
+
+export type { DiscoveredDevice } from "./discovery-service";
 
 export type CurrentPlaying = {
   id?: string;
@@ -31,6 +34,10 @@ export class SonosService {
     return this.device;
   }
 
+  public getDevices(): SonosDevice[] {
+    return this.manager?.Devices || [];
+  }
+
   private async ensureInitialized(): Promise<boolean> {
     if (!this.isInitialized || !this.device) {
       return await this.initialize();
@@ -38,38 +45,70 @@ export class SonosService {
     return true;
   }
 
-  public async initialize(ipAddress?: string): Promise<boolean> {
-    if (this.isInitialized) return true;
+  public async discoverDevices(): Promise<DiscoveredDevice[]> {
+    return discoverSonosDevices();
+  }
+
+  public selectDeviceByUuid(uuid: string): boolean {
+    if (!this.manager) return false;
+
+    const device = this.manager.Devices.find((d) => d.Uuid === uuid);
+    if (device) {
+      this.device = device;
+      streamDeck.logger.info(`Selected Sonos device: ${device.Name}`);
+      return true;
+    }
+    return false;
+  }
+
+  public async initialize(ipAddress?: string, deviceUuid?: string): Promise<boolean> {
+    if (this.isInitialized && this.device) {
+      if (deviceUuid && this.device.Uuid !== deviceUuid) {
+        return this.selectDeviceByUuid(deviceUuid);
+      }
+      return true;
+    }
 
     this.manager = new SonosManager();
-    let initResult;
-    if (ipAddress) {
-      initResult = await tryCatch(this.manager.InitializeFromDevice(ipAddress));
-    } else {
-      initResult = await tryCatch(this.manager.InitializeWithDiscovery(10));
+
+    let targetIp = ipAddress;
+    if (!targetIp) {
+      streamDeck.logger.info("No IP provided, discovering via mDNS...");
+      const devices = await this.discoverDevices();
+      const targetDevice = deviceUuid
+        ? devices.find((d) => d.uuid === deviceUuid)
+        : devices[0];
+
+      if (!targetDevice) {
+        streamDeck.logger.error("No Sonos devices found via mDNS");
+        return false;
+      }
+      targetIp = targetDevice.ip;
     }
+
+    const initResult = await tryCatch(this.manager.InitializeFromDevice(targetIp));
+
     if (initResult.error) {
-      streamDeck.logger.error(
-        `Failed to initialize Sonos: ${initResult.error}`,
-      );
+      streamDeck.logger.error(`Failed to initialize Sonos: ${initResult.error}`);
       return false;
     }
 
-    if (this.manager.Devices.length > 0) {
-      this.device =
-        this.manager.Devices.find(
-          (d) =>
-            d.Name.toLowerCase().includes("arc") ||
-            d.Name.toLowerCase().includes("sonos arc"),
-        ) || this.manager.Devices[0];
-
-      streamDeck.logger.info(`Connected to Sonos device: ${this.device.Name}`);
-      this.isInitialized = true;
-      return true;
-    } else {
+    if (this.manager.Devices.length === 0) {
       streamDeck.logger.error("No Sonos devices found");
       return false;
     }
+
+    if (deviceUuid) {
+      this.device = this.manager.Devices.find((d) => d.Uuid === deviceUuid);
+    }
+
+    if (!this.device) {
+      this.device = this.manager.Devices[0];
+    }
+
+    streamDeck.logger.info(`Connected to Sonos device: ${this.device.Name}`);
+    this.isInitialized = true;
+    return true;
   }
 
   public async togglePlayPause(): Promise<boolean> {
