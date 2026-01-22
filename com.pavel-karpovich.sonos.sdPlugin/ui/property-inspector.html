@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Sonos Settings</title>
+    <script src="sdpi-components.js"></script>
+    <style>
+        .action-btn {
+            background: #3d3d3d;
+            border: none;
+            border-radius: 4px;
+            color: #d8d8d8;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 6px 12px;
+        }
+        .action-btn:hover {
+            background: #4d4d4d;
+        }
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .action-btn.danger {
+            background: #5a3d3d;
+        }
+        .action-btn.danger:hover {
+            background: #6a4d4d;
+        }
+        .status-text {
+            color: #808080;
+            font-size: 11px;
+            margin-top: 4px;
+        }
+        .paired-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+        .device-name {
+            color: #d8d8d8;
+            font-size: 13px;
+        }
+        .device-ip {
+            color: #808080;
+            font-size: 11px;
+        }
+        .hidden {
+            display: none;
+        }
+        .discovery-section {
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <sdpi-item label="Sonos Device">
+        <div id="pairedView">
+            <div class="paired-info">
+                <div>
+                    <div class="device-name" id="pairedDeviceName">Not configured</div>
+                    <div class="device-ip" id="pairedDeviceIp"></div>
+                </div>
+                <button class="action-btn danger" id="disconnectBtn">Change</button>
+            </div>
+        </div>
+
+        <div id="discoveryView" class="hidden">
+            <select id="deviceSelect" style="width: 100%; padding: 4px; margin-bottom: 8px;">
+                <option value="">Select a device...</option>
+            </select>
+            <div style="display: flex; gap: 8px;">
+                <button class="action-btn" id="discoverBtn">Discover</button>
+                <button class="action-btn" id="cancelBtn">Cancel</button>
+            </div>
+            <div class="status-text" id="statusText"></div>
+        </div>
+    </sdpi-item>
+
+    <script>
+        const { streamDeckClient } = SDPIComponents;
+
+        const pairedView = document.getElementById('pairedView');
+        const discoveryView = document.getElementById('discoveryView');
+        const pairedDeviceName = document.getElementById('pairedDeviceName');
+        const pairedDeviceIp = document.getElementById('pairedDeviceIp');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const deviceSelect = document.getElementById('deviceSelect');
+        const discoverBtn = document.getElementById('discoverBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const statusText = document.getElementById('statusText');
+
+        let devices = [];
+        let currentSettings = {};
+
+        function showPairedView() {
+            pairedView.classList.remove('hidden');
+            discoveryView.classList.add('hidden');
+        }
+
+        function showDiscoveryView() {
+            pairedView.classList.add('hidden');
+            discoveryView.classList.remove('hidden');
+        }
+
+        function updatePairedDevice(settings) {
+            if (settings.deviceUuid) {
+                pairedDeviceName.textContent = settings.deviceName || 'Sonos Device';
+                pairedDeviceIp.textContent = settings.ipAddress || settings.deviceUuid;
+                showPairedView();
+            } else {
+                pairedDeviceName.textContent = 'Not configured';
+                pairedDeviceIp.textContent = '';
+                showDiscoveryView();
+                requestDiscovery();
+            }
+        }
+
+        function updateDeviceDropdown(discoveredDevices, selectedUuid) {
+            devices = discoveredDevices || [];
+            deviceSelect.innerHTML = '';
+
+            if (devices.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No devices found';
+                deviceSelect.appendChild(option);
+                statusText.textContent = 'No Sonos devices found';
+                return;
+            }
+
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Select a device...';
+            deviceSelect.appendChild(defaultOption);
+
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.uuid;
+                option.textContent = `${device.name} (${device.ip})`;
+                if (device.uuid === selectedUuid) {
+                    option.selected = true;
+                }
+                deviceSelect.appendChild(option);
+            });
+
+            statusText.textContent = `Found ${devices.length} device${devices.length > 1 ? 's' : ''}`;
+        }
+
+        function requestDiscovery() {
+            discoverBtn.disabled = true;
+            statusText.textContent = 'Discovering...';
+            deviceSelect.innerHTML = '<option value="">Discovering...</option>';
+
+            streamDeckClient.send('sendToPlugin', { action: 'discover' });
+
+            setTimeout(() => {
+                discoverBtn.disabled = false;
+            }, 10000);
+        }
+
+        disconnectBtn.addEventListener('click', () => {
+            showDiscoveryView();
+            requestDiscovery();
+        });
+
+        discoverBtn.addEventListener('click', requestDiscovery);
+
+        cancelBtn.addEventListener('click', () => {
+            if (currentSettings.deviceUuid) {
+                showPairedView();
+            }
+        });
+
+        deviceSelect.addEventListener('change', async (e) => {
+            const selectedUuid = e.target.value;
+            const selectedDevice = devices.find(d => d.uuid === selectedUuid);
+
+            if (selectedDevice) {
+                currentSettings = {
+                    deviceUuid: selectedUuid,
+                    deviceName: selectedDevice.name,
+                    ipAddress: selectedDevice.ip
+                };
+                await streamDeckClient.setSettings(currentSettings);
+                updatePairedDevice(currentSettings);
+            }
+        });
+
+        streamDeckClient.sendToPropertyInspector.subscribe((event) => {
+            const payload = event.payload;
+            if (payload.action === 'deviceList') {
+                updateDeviceDropdown(payload.devices, payload.selectedUuid);
+                discoverBtn.disabled = false;
+            }
+        });
+
+        streamDeckClient.didReceiveSettings.subscribe((event) => {
+            currentSettings = event.payload?.settings || {};
+            updatePairedDevice(currentSettings);
+        });
+    </script>
+</body>
+</html>

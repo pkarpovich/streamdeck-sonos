@@ -7,6 +7,7 @@ import {
   type TouchTapEvent,
   type WillAppearEvent,
   type DialAction,
+  type SendToPluginEvent,
 } from "@elgato/streamdeck";
 import streamDeck from "@elgato/streamdeck";
 import { SonosService } from "../services/sonos-service";
@@ -25,18 +26,17 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
   override async onWillAppear(
     ev: WillAppearEvent<SonosVolumeSettings>,
   ): Promise<void> {
+    const settings = ev.payload.settings;
     const { error: initError } = await tryCatch(
-      this.sonosService.initialize(ev.payload.settings.ipAddress),
+      this.sonosService.initialize(settings.ipAddress, settings.deviceUuid),
     );
     if (initError) {
-      streamDeck.logger.error(
-        `Error in onWillAppear (initialize): ${initError}`,
-      );
+      streamDeck.logger.error(`Error in onWillAppear (initialize): ${initError}`);
       return;
     }
 
-    if (ev.payload.settings.volumeStep) {
-      this.volumeStep = ev.payload.settings.volumeStep;
+    if (settings.volumeStep) {
+      this.volumeStep = settings.volumeStep;
     }
 
     if (ev.action.isDial()) {
@@ -46,9 +46,7 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
         this.updateDialDisplay(ev.action),
       );
       if (displayError) {
-        streamDeck.logger.error(
-          `Error in onWillAppear (updateDialDisplay): ${displayError}`,
-        );
+        streamDeck.logger.error(`Error in onWillAppear (updateDialDisplay): ${displayError}`);
       }
 
       const { error: descError } = await tryCatch(
@@ -60,10 +58,23 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
         }),
       );
       if (descError) {
-        streamDeck.logger.error(
-          `Error in onWillAppear (setTriggerDescription): ${descError}`,
-        );
+        streamDeck.logger.error(`Error in onWillAppear (setTriggerDescription): ${descError}`);
       }
+    }
+  }
+
+  override async onSendToPlugin(
+    ev: SendToPluginEvent<{ action: string }, SonosVolumeSettings>,
+  ): Promise<void> {
+    if (ev.payload.action === "discover") {
+      const devices = await this.sonosService.discoverDevices();
+      const settings = await ev.action.getSettings();
+
+      await streamDeck.ui.sendToPropertyInspector({
+        action: "deviceList",
+        devices,
+        selectedUuid: settings.deviceUuid,
+      });
     }
   }
 

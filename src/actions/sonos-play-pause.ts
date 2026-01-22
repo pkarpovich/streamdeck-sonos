@@ -4,6 +4,7 @@ import streamDeck, {
   type KeyDownEvent,
   type WillAppearEvent,
   type KeyAction,
+  type SendToPluginEvent,
 } from "@elgato/streamdeck";
 import { SonosService, type CurrentPlaying } from "../services/sonos-service";
 import { tryCatch } from "../utils/tryCatch";
@@ -23,13 +24,12 @@ export class SonosPlayPauseAction extends SingletonAction<SonosSettings> {
   override async onWillAppear(
     ev: WillAppearEvent<SonosSettings>,
   ): Promise<void> {
+    const settings = ev.payload.settings;
     const { error: initError } = await tryCatch(
-      this.sonosService.initialize(ev.payload.settings.ipAddress),
+      this.sonosService.initialize(settings.ipAddress, settings.deviceUuid),
     );
     if (initError) {
-      streamDeck.logger.error(
-        `Error in onWillAppear (initialize): ${initError}`,
-      );
+      streamDeck.logger.error(`Error in onWillAppear (initialize): ${initError}`);
       return;
     }
 
@@ -37,9 +37,7 @@ export class SonosPlayPauseAction extends SingletonAction<SonosSettings> {
       this.updateButtonState(ev.action as KeyAction<SonosSettings>),
     );
     if (updateError) {
-      streamDeck.logger.error(
-        `Error in onWillAppear (updateButtonState): ${updateError}`,
-      );
+      streamDeck.logger.error(`Error in onWillAppear (updateButtonState): ${updateError}`);
     }
 
     this.updateInterval = setInterval(async () => {
@@ -50,6 +48,21 @@ export class SonosPlayPauseAction extends SingletonAction<SonosSettings> {
         streamDeck.logger.error(`Error in update interval: ${refreshError}`);
       }
     }, 5000);
+  }
+
+  override async onSendToPlugin(
+    ev: SendToPluginEvent<{ action: string }, SonosSettings>,
+  ): Promise<void> {
+    if (ev.payload.action === "discover") {
+      const devices = await this.sonosService.discoverDevices();
+      const settings = await ev.action.getSettings();
+
+      await streamDeck.ui.sendToPropertyInspector({
+        action: "deviceList",
+        devices,
+        selectedUuid: settings.deviceUuid,
+      });
+    }
   }
 
   override async onKeyDown(ev: KeyDownEvent<SonosSettings>): Promise<void> {
