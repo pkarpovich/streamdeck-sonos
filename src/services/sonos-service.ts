@@ -2,17 +2,25 @@ import { SonosDevice, SonosManager } from "@svrooij/sonos";
 import { type Track, PlayMode } from "@svrooij/sonos/lib/models";
 import streamDeck from "@elgato/streamdeck";
 import { tryCatch } from "../utils/tryCatch";
-import { getImageAsBase64 } from "../utils/image";
 import { discoverSonosDevices, type DiscoveredDevice } from "./discovery-service";
 
 export type { DiscoveredDevice } from "./discovery-service";
 
-export type CurrentPlaying = {
-  id?: string;
+export type CurrentTrack = {
+  trackUri?: string;
   artist?: string;
   album?: string;
-  track?: string;
-  cover?: string;
+  title?: string;
+  albumArtUrl?: string;
+};
+
+const SHUFFLE_TOGGLE_MAP: Record<string, PlayMode> = {
+  NORMAL: PlayMode.ShuffleNoRepeat,
+  REPEAT_ALL: PlayMode.Shuffle,
+  REPEAT_ONE: PlayMode.SuffleRepeatOne,
+  SHUFFLE_NOREPEAT: PlayMode.Normal,
+  SHUFFLE: PlayMode.RepeatAll,
+  SHUFFLE_REPEAT_ONE: PlayMode.RepeatOne,
 };
 
 export class SonosService {
@@ -240,13 +248,14 @@ export class SonosService {
     return result.CurrentMute;
   }
 
-  public async getCurrentPlaying(): Promise<CurrentPlaying | null> {
+  public async getCurrentTrack(): Promise<CurrentTrack | null> {
     if (!this.device) return null;
+
     const { data: state, error: stateError } = await tryCatch(
       this.device.GetState(),
     );
     if (stateError || !state) {
-      streamDeck.logger.error(`Failed to get current playing: ${stateError}`);
+      streamDeck.logger.error(`Failed to get current track: ${stateError}`);
       return null;
     }
 
@@ -254,13 +263,11 @@ export class SonosService {
     if (!metadata) return null;
 
     return {
-      id: metadata.TrackUri,
+      trackUri: metadata.TrackUri,
       artist: metadata.Artist,
       album: metadata.Album,
-      track: metadata.Title,
-      cover: metadata.AlbumArtUri
-        ? await getImageAsBase64(metadata.AlbumArtUri)
-        : "",
+      title: metadata.Title,
+      albumArtUrl: metadata.AlbumArtUri,
     };
   }
 
@@ -285,45 +292,30 @@ export class SonosService {
   public async toggleShuffle(): Promise<boolean> {
     if (!(await this.ensureInitialized())) return false;
 
-    const { data: currentMode, error: modeError } = await tryCatch(
-      this.device!.AVTransportService.GetTransportSettings({
-        InstanceID: 0,
-      }),
+    const { data: settings, error: getError } = await tryCatch(
+      this.device!.AVTransportService.GetTransportSettings({ InstanceID: 0 }),
     );
 
-    if (modeError) {
-      streamDeck.logger.error(`Failed to get current play mode: ${modeError}`);
+    if (getError) {
+      streamDeck.logger.error(`Failed to get play mode: ${getError}`);
       return false;
     }
 
-    let newMode: PlayMode;
-    const currentPlayMode = currentMode.PlayMode;
-
-    if (currentPlayMode.includes("SHUFFLE")) {
-      newMode = currentPlayMode.includes("REPEAT_ONE")
-        ? PlayMode.RepeatOne
-        : currentPlayMode.includes("REPEAT")
-          ? PlayMode.RepeatAll
-          : PlayMode.Normal;
-    } else {
-      newMode = currentPlayMode.includes("REPEAT_ONE")
-        ? PlayMode.SuffleRepeatOne
-        : currentPlayMode.includes("REPEAT")
-          ? PlayMode.Shuffle
-          : PlayMode.ShuffleNoRepeat;
+    const newMode = SHUFFLE_TOGGLE_MAP[settings.PlayMode];
+    if (!newMode) {
+      streamDeck.logger.error(`Unknown play mode: ${settings.PlayMode}`);
+      return false;
     }
 
-    const { error: setPlayModeError } = await tryCatch(
+    const { error: setError } = await tryCatch(
       this.device!.AVTransportService.SetPlayMode({
         InstanceID: 0,
         NewPlayMode: newMode,
       }),
     );
 
-    if (setPlayModeError) {
-      streamDeck.logger.error(
-        `Failed to toggle shuffle mode: ${setPlayModeError}`,
-      );
+    if (setError) {
+      streamDeck.logger.error(`Failed to set play mode: ${setError}`);
       return false;
     }
 

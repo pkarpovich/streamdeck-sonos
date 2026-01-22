@@ -22,6 +22,7 @@ type SonosVolumeSettings = SonosSettings & {
 export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
   private sonosService = SonosService.getInstance();
   private volumeStep = 2;
+  private updateInterval: NodeJS.Timeout | null = null;
 
   override async onWillAppear(
     ev: WillAppearEvent<SonosVolumeSettings>,
@@ -39,27 +40,43 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
       this.volumeStep = settings.volumeStep;
     }
 
-    if (ev.action.isDial()) {
-      ev.action.setFeedbackLayout("$B1");
+    if (!ev.action.isDial()) return;
 
-      const { error: displayError } = await tryCatch(
-        this.updateDialDisplay(ev.action),
-      );
-      if (displayError) {
-        streamDeck.logger.error(`Error in onWillAppear (updateDialDisplay): ${displayError}`);
-      }
+    ev.action.setFeedbackLayout("$B1");
 
-      const { error: descError } = await tryCatch(
-        ev.action.setTriggerDescription({
-          rotate: "Adjust Volume",
-          push: "Mute / Unmute",
-          touch: "Play / Pause",
-          longTouch: "Reset Volume to 25%",
-        }),
+    const { error: displayError } = await tryCatch(
+      this.updateDialDisplay(ev.action as DialAction<SonosVolumeSettings>),
+    );
+    if (displayError) {
+      streamDeck.logger.error(`Error in onWillAppear (updateDialDisplay): ${displayError}`);
+    }
+
+    const { error: descError } = await tryCatch(
+      ev.action.setTriggerDescription({
+        rotate: "Adjust Volume",
+        push: "Mute / Unmute",
+        touch: "Play / Pause",
+        longTouch: "Reset Volume to 25%",
+      }),
+    );
+    if (descError) {
+      streamDeck.logger.error(`Error in onWillAppear (setTriggerDescription): ${descError}`);
+    }
+
+    this.updateInterval = setInterval(async () => {
+      const { error: refreshError } = await tryCatch(
+        this.updateDialDisplay(ev.action as DialAction<SonosVolumeSettings>),
       );
-      if (descError) {
-        streamDeck.logger.error(`Error in onWillAppear (setTriggerDescription): ${descError}`);
+      if (refreshError) {
+        streamDeck.logger.error(`Error in update interval: ${refreshError}`);
       }
+    }, 5000);
+  }
+
+  override async onWillDisappear(): Promise<void> {
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
     }
   }
 
