@@ -31,7 +31,10 @@ A Stream Deck plugin that provides control of your Sonos speakers directly from 
 ## Setup
 
 1. After installation, drag any Sonos action from the "Sonos" category to your Stream Deck
-2. On first use, the plugin will automatically discover Sonos devices on your network
+2. Click on the action to open the Property Inspector
+3. Click "Discover" to find Sonos devices on your network (uses mDNS)
+4. Select your desired device from the dropdown
+5. The selected device is saved per-action, so you can control different speakers with different buttons
 
 ## Available Actions
 
@@ -39,7 +42,7 @@ A Stream Deck plugin that provides control of your Sonos speakers directly from 
 Control playback of your current Sonos queue. The button will update to show the current state (playing/paused) and displays album artwork when playing.
 
 ### Volume Dial (Stream Deck+ only)
-Rotate the dial to adjust volume. Press the dial to toggle mute. Tap the touchscreen to play/pause. Long-press the touchscreen to reset volume to 25%.
+Rotate the dial to adjust volume. Press the dial to toggle mute. Tap the touchscreen to play/pause. Long-press the touchscreen to reset volume to 25%. The display updates in real-time every 5 seconds to stay in sync with your Sonos.
 
 ### Next Track Button
 Skip to the next track in your queue.
@@ -54,9 +57,10 @@ Enable or disable shuffle mode for your current queue. The button will update to
 
 ### Prerequisites
 - Node.js v24 or later
-- pnpm
+- pnpm v10 or later
 - Elgato Stream Deck software
 - Stream Deck CLI (`npm install -g @elgato/cli`)
+- (Optional) [mise](https://mise.jdx.dev/) for automatic version management
 
 ### Getting Started
 
@@ -89,6 +93,11 @@ pnpm build
 pnpm exec streamdeck restart com.pavel-karpovich.sonos
 ```
 
+Or use mise task (combines both commands):
+```bash
+mise run dev
+```
+
 ### Development with Hot-Reload
 
 For development with automatic rebuild and restart on file changes:
@@ -105,9 +114,10 @@ pnpm pack      # Create .streamDeckPlugin distribution file
 
 ## Troubleshooting
 
-- **No devices found**: Ensure your Sonos speakers are on the same network as your computer
+- **No devices found**: Ensure your Sonos speakers are reachable from your computer. The plugin uses mDNS for discovery, which works across VLANs if your router has mDNS reflection/relay enabled (common on UniFi and other enterprise routers)
 - **Cannot control playback**: Check that your speaker isn't grouped with another speaker that's the group coordinator
 - **Plugin not appearing**: Try restarting the Stream Deck software
+- **Device not responding**: Try re-discovering devices in the Property Inspector by clicking "Change" then "Discover"
 
 ## License
 
