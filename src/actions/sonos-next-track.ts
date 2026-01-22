@@ -3,6 +3,7 @@ import streamDeck, {
   KeyDownEvent,
   SingletonAction,
   WillAppearEvent,
+  type SendToPluginEvent,
 } from "@elgato/streamdeck";
 import { SonosService } from "../services/sonos-service";
 import { tryCatch } from "../utils/tryCatch";
@@ -15,11 +16,27 @@ export class SonosNextTrackAction extends SingletonAction<SonosSettings> {
   override async onWillAppear(
     ev: WillAppearEvent<SonosSettings>,
   ): Promise<void> {
+    const settings = ev.payload.settings;
     const { error } = await tryCatch(
-      this.sonosService.initialize(ev.payload.settings.ipAddress),
+      this.sonosService.initialize(settings.ipAddress, settings.deviceUuid),
     );
     if (error) {
       streamDeck.logger.error(`Error in onWillAppear: ${error}`);
+    }
+  }
+
+  override async onSendToPlugin(
+    ev: SendToPluginEvent<{ action: string }, SonosSettings>,
+  ): Promise<void> {
+    if (ev.payload.action === "discover") {
+      const devices = await this.sonosService.discoverDevices();
+      const settings = await ev.action.getSettings();
+
+      await streamDeck.ui.sendToPropertyInspector({
+        action: "deviceList",
+        devices,
+        selectedUuid: settings.deviceUuid,
+      });
     }
   }
 

@@ -1,0 +1,11 @@
+[tools]
+node = "24"
+pnpm = "10"
+
+[tasks.dev]
+description = "Build and restart the Stream Deck plugin"
+run = "pnpm build && pnpm exec streamdeck restart com.pavel-karpovich.sonos"
+
+[tasks.link]
+description = "Link plugin to Stream Deck (run once)"
+run = "pnpm exec streamdeck link com.pavel-karpovich.sonos.sdPlugin"

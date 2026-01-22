@@ -107,6 +107,7 @@
 	"Category": "sonos",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
+	"PropertyInspectorPath": "ui/property-inspector.html",
 	"Description": "Plugin to control sonos speaker",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 2,
@@ -124,7 +125,7 @@
 		}
 	],
 	"Nodejs": {
-		"Version": "20",
+		"Version": "24",
 		"Debug": "enabled"
 	},
 	"UUID": "com.pavel-karpovich.sonos"

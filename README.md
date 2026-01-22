@@ -18,7 +18,7 @@ A Stream Deck plugin that provides control of your Sonos speakers directly from 
 - Elgato Stream Deck hardware (any model)
 - Stream Deck software v6.4 or later
 - Sonos speaker(s) on the same network
-- Node.js v20 or later (for development only)
+- Node.js v24 or later (for development only)
 
 ## Installation
 
@@ -53,9 +53,10 @@ Enable or disable shuffle mode for your current queue. The button will update to
 ## Development
 
 ### Prerequisites
-- Node.js v20 or later
-- npm or yarn
+- Node.js v24 or later
+- pnpm
 - Elgato Stream Deck software
+- Stream Deck CLI (`npm install -g @elgato/cli`)
 
 ### Getting Started
 
@@ -75,9 +76,31 @@ pnpm install
 pnpm build
 ```
 
-4. For development with hot-reload:
+### Testing the Plugin
+
+1. Link the plugin to Stream Deck (creates a symlink, only needed once):
+```bash
+pnpm exec streamdeck link com.pavel-karpovich.sonos.sdPlugin
+```
+
+2. After making changes, rebuild and restart:
+```bash
+pnpm build
+pnpm exec streamdeck restart com.pavel-karpovich.sonos
+```
+
+### Development with Hot-Reload
+
+For development with automatic rebuild and restart on file changes:
 ```bash
 pnpm watch
+```
+
+### Other Commands
+
+```bash
+pnpm validate  # Validate plugin manifest
+pnpm pack      # Create .streamDeckPlugin distribution file
 ```
 
 ## Troubleshooting

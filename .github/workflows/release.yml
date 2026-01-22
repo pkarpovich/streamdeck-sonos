@@ -3,14 +3,14 @@ name: Release Stream Deck Plugin
 on:
   push:
     tags:
-      - 'v*' # Will trigger on any tag that starts with 'v', like v1.0.0
+      - 'v*'
 
 permissions:
   contents: write
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,12 +18,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
           run_install: false
 
       - name: Get pnpm store directory
@@ -32,7 +32,7 @@ jobs:
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Setup pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -42,32 +42,36 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Validate plugin manifest
+        run: pnpm validate
+
       - name: Build plugin
         run: pnpm build
 
-      - name: Pack
+      - name: Pack plugin
         uses: neilenns/streamdeck-cli-pack@v1
 
+      - name: Verify artifact exists
+        run: |
+          if ! ls *.streamDeckPlugin 1> /dev/null 2>&1; then
+            echo "Error: No .streamDeckPlugin file found"
+            exit 1
+          fi
+          echo "Found plugin file:"
+          ls -la *.streamDeckPlugin
+
       - name: Create Release
-        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           name: Stream Deck Sonos Plugin ${{ github.ref_name }}
           draft: false
           prerelease: false
+          generate_release_notes: true
           files: |
             *.streamDeckPlugin
           body: |
-            # Stream Deck Sonos Plugin ${{ github.ref_name }}
-            
             ## Installation
-            1. Download the .streamDeckPlugin file
+            1. Download the `.streamDeckPlugin` file below
             2. Double-click the file to install it in the Stream Deck software
-            
-            ## Features
-            - Control Play/Pause on your Sonos speakers
-            - Adjust volume using a dial
-            - Skip to next/previous track
-            - Toggle shuffle mode
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

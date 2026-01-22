@@ -2,14 +2,25 @@ import { SonosDevice, SonosManager } from "@svrooij/sonos";
 import { type Track, PlayMode } from "@svrooij/sonos/lib/models";
 import streamDeck from "@elgato/streamdeck";
 import { tryCatch } from "../utils/tryCatch";
-import { getImageAsBase64 } from "../utils/image";
+import { discoverSonosDevices, type DiscoveredDevice } from "./discovery-service";
 
-export type CurrentPlaying = {
-  id?: string;
+export type { DiscoveredDevice } from "./discovery-service";
+
+export type CurrentTrack = {
+  trackUri?: string;
   artist?: string;
   album?: string;
-  track?: string;
-  cover?: string;
+  title?: string;
+  albumArtUrl?: string;
+};
+
+const SHUFFLE_TOGGLE_MAP: Record<string, PlayMode> = {
+  NORMAL: PlayMode.ShuffleNoRepeat,
+  REPEAT_ALL: PlayMode.Shuffle,
+  REPEAT_ONE: PlayMode.SuffleRepeatOne,
+  SHUFFLE_NOREPEAT: PlayMode.Normal,
+  SHUFFLE: PlayMode.RepeatAll,
+  SHUFFLE_REPEAT_ONE: PlayMode.RepeatOne,
 };
 
 export class SonosService {
@@ -31,6 +42,10 @@ export class SonosService {
     return this.device;
   }
 
+  public getDevices(): SonosDevice[] {
+    return this.manager?.Devices || [];
+  }
+
   private async ensureInitialized(): Promise<boolean> {
     if (!this.isInitialized || !this.device) {
       return await this.initialize();
@@ -38,38 +53,70 @@ export class SonosService {
     return true;
   }
 
-  public async initialize(ipAddress?: string): Promise<boolean> {
-    if (this.isInitialized) return true;
+  public async discoverDevices(): Promise<DiscoveredDevice[]> {
+    return discoverSonosDevices();
+  }
+
+  public selectDeviceByUuid(uuid: string): boolean {
+    if (!this.manager) return false;
+
+    const device = this.manager.Devices.find((d) => d.Uuid === uuid);
+    if (device) {
+      this.device = device;
+      streamDeck.logger.info(`Selected Sonos device: ${device.Name}`);
+      return true;
+    }
+    return false;
+  }
+
+  public async initialize(ipAddress?: string, deviceUuid?: string): Promise<boolean> {
+    if (this.isInitialized && this.device) {
+      if (deviceUuid && this.device.Uuid !== deviceUuid) {
+        return this.selectDeviceByUuid(deviceUuid);
+      }
+      return true;
+    }
 
     this.manager = new SonosManager();
-    let initResult;
-    if (ipAddress) {
-      initResult = await tryCatch(this.manager.InitializeFromDevice(ipAddress));
-    } else {
-      initResult = await tryCatch(this.manager.InitializeWithDiscovery(10));
+
+    let targetIp = ipAddress;
+    if (!targetIp) {
+      streamDeck.logger.info("No IP provided, discovering via mDNS...");
+      const devices = await this.discoverDevices();
+      const targetDevice = deviceUuid
+        ? devices.find((d) => d.uuid === deviceUuid)
+        : devices[0];
+
+      if (!targetDevice) {
+        streamDeck.logger.error("No Sonos devices found via mDNS");
+        return false;
+      }
+      targetIp = targetDevice.ip;
     }
+
+    const initResult = await tryCatch(this.manager.InitializeFromDevice(targetIp));
+
     if (initResult.error) {
-      streamDeck.logger.error(
-        `Failed to initialize Sonos: ${initResult.error}`,
-      );
+      streamDeck.logger.error(`Failed to initialize Sonos: ${initResult.error}`);
       return false;
     }
 
-    if (this.manager.Devices.length > 0) {
-      this.device =
-        this.manager.Devices.find(
-          (d) =>
-            d.Name.toLowerCase().includes("arc") ||
-            d.Name.toLowerCase().includes("sonos arc"),
-        ) || this.manager.Devices[0];
-
-      streamDeck.logger.info(`Connected to Sonos device: ${this.device.Name}`);
-      this.isInitialized = true;
-      return true;
-    } else {
+    if (this.manager.Devices.length === 0) {
       streamDeck.logger.error("No Sonos devices found");
       return false;
     }
+
+    if (deviceUuid) {
+      this.device = this.manager.Devices.find((d) => d.Uuid === deviceUuid);
+    }
+
+    if (!this.device) {
+      this.device = this.manager.Devices[0];
+    }
+
+    streamDeck.logger.info(`Connected to Sonos device: ${this.device.Name}`);
+    this.isInitialized = true;
+    return true;
   }
 
   public async togglePlayPause(): Promise<boolean> {
@@ -201,13 +248,14 @@ export class SonosService {
     return result.CurrentMute;
   }
 
-  public async getCurrentPlaying(): Promise<CurrentPlaying | null> {
+  public async getCurrentTrack(): Promise<CurrentTrack | null> {
     if (!this.device) return null;
+
     const { data: state, error: stateError } = await tryCatch(
       this.device.GetState(),
     );
     if (stateError || !state) {
-      streamDeck.logger.error(`Failed to get current playing: ${stateError}`);
+      streamDeck.logger.error(`Failed to get current track: ${stateError}`);
       return null;
     }
 
@@ -215,13 +263,11 @@ export class SonosService {
     if (!metadata) return null;
 
     return {
-      id: metadata.TrackUri,
+      trackUri: metadata.TrackUri,
       artist: metadata.Artist,
       album: metadata.Album,
-      track: metadata.Title,
-      cover: metadata.AlbumArtUri
-        ? await getImageAsBase64(metadata.AlbumArtUri)
-        : "",
+      title: metadata.Title,
+      albumArtUrl: metadata.AlbumArtUri,
     };
   }
 
@@ -246,45 +292,30 @@ export class SonosService {
   public async toggleShuffle(): Promise<boolean> {
     if (!(await this.ensureInitialized())) return false;
 
-    const { data: currentMode, error: modeError } = await tryCatch(
-      this.device!.AVTransportService.GetTransportSettings({
-        InstanceID: 0,
-      }),
+    const { data: settings, error: getError } = await tryCatch(
+      this.device!.AVTransportService.GetTransportSettings({ InstanceID: 0 }),
     );
 
-    if (modeError) {
-      streamDeck.logger.error(`Failed to get current play mode: ${modeError}`);
+    if (getError) {
+      streamDeck.logger.error(`Failed to get play mode: ${getError}`);
       return false;
     }
 
-    let newMode: PlayMode;
-    const currentPlayMode = currentMode.PlayMode;
-
-    if (currentPlayMode.includes("SHUFFLE")) {
-      newMode = currentPlayMode.includes("REPEAT_ONE")
-        ? PlayMode.RepeatOne
-        : currentPlayMode.includes("REPEAT")
-          ? PlayMode.RepeatAll
-          : PlayMode.Normal;
-    } else {
-      newMode = currentPlayMode.includes("REPEAT_ONE")
-        ? PlayMode.SuffleRepeatOne
-        : currentPlayMode.includes("REPEAT")
-          ? PlayMode.Shuffle
-          : PlayMode.ShuffleNoRepeat;
+    const newMode = SHUFFLE_TOGGLE_MAP[settings.PlayMode];
+    if (!newMode) {
+      streamDeck.logger.error(`Unknown play mode: ${settings.PlayMode}`);
+      return false;
     }
 
-    const { error: setPlayModeError } = await tryCatch(
+    const { error: setError } = await tryCatch(
       this.device!.AVTransportService.SetPlayMode({
         InstanceID: 0,
         NewPlayMode: newMode,
       }),
     );
 
-    if (setPlayModeError) {
-      streamDeck.logger.error(
-        `Failed to toggle shuffle mode: ${setPlayModeError}`,
-      );
+    if (setError) {
+      streamDeck.logger.error(`Failed to set play mode: ${setError}`);
       return false;
     }
 
