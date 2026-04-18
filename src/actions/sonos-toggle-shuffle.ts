@@ -24,15 +24,22 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
     ev: WillAppearEvent<SonosSettings>,
   ): Promise<void> {
     const { error: updateError } = await tryCatch(
-      this.updateButtonState(ev.action as KeyAction<SonosSettings>),
+      this.updateButtonState(
+        ev.action as KeyAction<SonosSettings>,
+        ev.payload.settings.deviceUuid,
+      ),
     );
     if (updateError) {
       streamDeck.logger.error(`Error in onWillAppear (updateButtonState): ${updateError}`);
     }
 
     this.updateInterval = setInterval(async () => {
+      const settings = await ev.action.getSettings();
       const { error: refreshError } = await tryCatch(
-        this.updateButtonState(ev.action as KeyAction<SonosSettings>),
+        this.updateButtonState(
+          ev.action as KeyAction<SonosSettings>,
+          settings.deviceUuid,
+        ),
       );
       if (refreshError) {
         streamDeck.logger.error(`Error in update interval: ${refreshError}`);
@@ -56,8 +63,9 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
   }
 
   override async onKeyDown(ev: KeyDownEvent<SonosSettings>): Promise<void> {
+    const uuid = ev.payload.settings.deviceUuid;
     const { data: success, error: toggleError } = await tryCatch(
-      this.sonosService.toggleShuffle(),
+      this.sonosService.toggleShuffle(uuid),
     );
     if (toggleError) {
       streamDeck.logger.error(
@@ -69,7 +77,7 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
     if (success) {
       await ev.action.showOk();
       const { error: updateError } = await tryCatch(
-        this.updateButtonState(ev.action),
+        this.updateButtonState(ev.action, uuid),
       );
       if (updateError) {
         streamDeck.logger.error(
@@ -90,9 +98,10 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
 
   private async updateButtonState(
     action: KeyAction<SonosSettings>,
+    uuid?: string,
   ): Promise<void> {
     const { data: shuffleEnabled, error: shuffleErr } = await tryCatch(
-      this.sonosService.getShuffleMode(),
+      this.sonosService.getShuffleMode(uuid),
     );
     if (shuffleErr) {
       streamDeck.logger.error(

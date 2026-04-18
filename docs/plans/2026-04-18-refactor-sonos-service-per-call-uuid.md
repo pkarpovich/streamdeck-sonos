@@ -105,13 +105,13 @@ The root cause is architectural: per-action settings vs per-process device state
 
 ### Task 4: Update 5 actions to thread `settings.deviceUuid`
 
-- [ ] in `onWillAppear` of each action: replace `sonosService.initialize(ip, uuid)` with a simple first-render call (e.g. `updateButtonState(ev.action, settings.deviceUuid)`), since there is nothing to "initialize" anymore
-- [ ] in every handler (`onKeyDown`, `onDialRotate`, `onDialDown`, `onTouchTap`, `onTriggerDescription`, timer callbacks): pass `settings.deviceUuid` (read via `ev.action.getSettings()` where needed) into the service call
-- [ ] adjust `updateButtonState` / `updateDialDisplay` helpers to accept a `uuid` parameter and pass it through
-- [ ] replace the `sonosService.getDevice()` usage in `sonos-volume-dial.ts:199` with `await sonosService.getDeviceByUuid(uuid)` for the `setTriggerDescription` path
-- [ ] for `src/actions/sonos-volume-dial.ts` the `setInterval` polling callback must read the latest `settings` via `ev.action.getSettings()` so device change via PI is picked up on the next tick
-- [ ] run `pnpm build` — must succeed
-- [ ] run `pnpm test` — must pass before Task 5
+- [x] in `onWillAppear` of each action: replace `sonosService.initialize(ip, uuid)` with a simple first-render call (e.g. `updateButtonState(ev.action, settings.deviceUuid)`), since there is nothing to "initialize" anymore
+- [x] in every handler (`onKeyDown`, `onDialRotate`, `onDialDown`, `onTouchTap`, `onTriggerDescription`, timer callbacks): pass `settings.deviceUuid` (read via `ev.action.getSettings()` where needed) into the service call
+- [x] adjust `updateButtonState` / `updateDialDisplay` helpers to accept a `uuid` parameter and pass it through
+- [x] replace the `sonosService.getDevice()` usage in `sonos-volume-dial.ts:199` with `await sonosService.getDeviceByUuid(uuid)` for the `setTriggerDescription` path
+- [x] for `src/actions/sonos-volume-dial.ts` the `setInterval` polling callback must read the latest `settings` via `ev.action.getSettings()` so device change via PI is picked up on the next tick
+- [x] run `pnpm build` — must succeed
+- [x] run `pnpm test` — must pass before Task 5
 
 ### Task 5: Add `onDidReceiveSettings` for live device switch
 

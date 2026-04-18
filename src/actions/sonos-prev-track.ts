@@ -40,7 +40,7 @@ export class SonosPreviousTrackAction extends SingletonAction<SonosSettings> {
 
   override async onKeyDown(ev: KeyDownEvent<SonosSettings>): Promise<void> {
     const { data: success, error } = await tryCatch(
-      this.sonosService.previousTrack(),
+      this.sonosService.previousTrack(ev.payload.settings.deviceUuid),
     );
     if (error) {
       streamDeck.logger.error(`Error in onKeyDown: ${error}`);

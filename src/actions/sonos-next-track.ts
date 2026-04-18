@@ -34,7 +34,7 @@ export class SonosNextTrackAction extends SingletonAction<SonosSettings> {
 
   override async onKeyDown(ev: KeyDownEvent<SonosSettings>): Promise<void> {
     const { data: success, error } = await tryCatch(
-      this.sonosService.nextTrack(),
+      this.sonosService.nextTrack(ev.payload.settings.deviceUuid),
     );
     if (error) {
       streamDeck.logger.error(`Error in onKeyDown: ${error}`);

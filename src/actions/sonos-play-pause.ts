@@ -28,15 +28,22 @@ export class SonosPlayPauseAction extends SingletonAction<SonosSettings> {
     ev: WillAppearEvent<SonosSettings>,
   ): Promise<void> {
     const { error: updateError } = await tryCatch(
-      this.updateButtonState(ev.action as KeyAction<SonosSettings>),
+      this.updateButtonState(
+        ev.action as KeyAction<SonosSettings>,
+        ev.payload.settings.deviceUuid,
+      ),
     );
     if (updateError) {
       streamDeck.logger.error(`Error in onWillAppear (updateButtonState): ${updateError}`);
     }
 
     this.updateInterval = setInterval(async () => {
+      const settings = await ev.action.getSettings();
       const { error: refreshError } = await tryCatch(
-        this.updateButtonState(ev.action as KeyAction<SonosSettings>),
+        this.updateButtonState(
+          ev.action as KeyAction<SonosSettings>,
+          settings.deviceUuid,
+        ),
       );
       if (refreshError) {
         streamDeck.logger.error(`Error in update interval: ${refreshError}`);
@@ -60,8 +67,9 @@ export class SonosPlayPauseAction extends SingletonAction<SonosSettings> {
   }
 
   override async onKeyDown(ev: KeyDownEvent<SonosSettings>): Promise<void> {
+    const uuid = ev.payload.settings.deviceUuid;
     const { data: success, error: toggleError } = await tryCatch(
-      this.sonosService.togglePlayPause(),
+      this.sonosService.togglePlayPause(uuid),
     );
     if (toggleError) {
       streamDeck.logger.error(`Failed to toggle playback: ${toggleError}`);
@@ -71,7 +79,7 @@ export class SonosPlayPauseAction extends SingletonAction<SonosSettings> {
     if (success) {
       await ev.action.showOk();
       const { error: updateError } = await tryCatch(
-        this.updateButtonState(ev.action),
+        this.updateButtonState(ev.action, uuid),
       );
       if (updateError) {
         streamDeck.logger.error(
@@ -92,9 +100,10 @@ export class SonosPlayPauseAction extends SingletonAction<SonosSettings> {
 
   private async updateButtonState(
     action: KeyAction<SonosSettings>,
+    uuid?: string,
   ): Promise<void> {
     const { data: playState, error: stateErr } = await tryCatch(
-      this.sonosService.getPlayState(),
+      this.sonosService.getPlayState(uuid),
     );
     if (stateErr) {
       streamDeck.logger.error(`Failed to get play state: ${stateErr}`);
@@ -110,7 +119,7 @@ export class SonosPlayPauseAction extends SingletonAction<SonosSettings> {
       return;
     }
 
-    const track = await this.sonosService.getCurrentTrack();
+    const track = await this.sonosService.getCurrentTrack(uuid);
     if (!track?.trackUri) return;
 
     const trackChanged = track.trackUri !== this.currentTrackUri;
