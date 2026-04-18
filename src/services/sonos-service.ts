@@ -40,27 +40,23 @@ export class SonosService {
     return discoverSonosDevices();
   }
 
-  private async ensureManager(seedIp?: string): Promise<SonosManager | null> {
+  private async ensureManager(): Promise<SonosManager | null> {
     if (this.manager && this.manager.Devices.length > 0) {
       return this.manager;
     }
 
-    let targetIp = seedIp;
-    if (!targetIp) {
-      const { data: devices, error } = await tryCatch(discoverSonosDevices());
-      if (error) {
-        streamDeck.logger.error(`Failed to discover Sonos devices: ${error}`);
-        return null;
-      }
-      if (!devices || devices.length === 0) {
-        streamDeck.logger.error("No Sonos devices found via mDNS");
-        return null;
-      }
-      targetIp = devices[0].ip;
+    const { data: devices, error } = await tryCatch(discoverSonosDevices());
+    if (error) {
+      streamDeck.logger.error(`Failed to discover Sonos devices: ${error}`);
+      return null;
+    }
+    if (!devices || devices.length === 0) {
+      streamDeck.logger.error("No Sonos devices found via mDNS");
+      return null;
     }
 
     const manager = new SonosManager();
-    const { error: initError } = await tryCatch(manager.InitializeFromDevice(targetIp));
+    const { error: initError } = await tryCatch(manager.InitializeFromDevice(devices[0].ip));
     if (initError) {
       streamDeck.logger.error(`Failed to initialize Sonos manager: ${initError}`);
       return null;

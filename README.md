@@ -108,8 +108,10 @@ pnpm watch
 ### Other Commands
 
 ```bash
-pnpm validate  # Validate plugin manifest
-pnpm pack      # Create .streamDeckPlugin distribution file
+pnpm validate   # Validate plugin manifest
+pnpm pack       # Create .streamDeckPlugin distribution file
+pnpm test       # Run unit tests (vitest)
+pnpm test:watch # Run unit tests in watch mode
 ```
 
 ## Troubleshooting

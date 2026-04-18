@@ -10,25 +10,6 @@ vi.mock("@elgato/streamdeck", () => ({
   },
 }));
 
-const managerState: {
-  devices: unknown[];
-  initSpy: (ip: string) => Promise<unknown>;
-} = {
-  devices: [],
-  initSpy: async () => undefined,
-};
-
-vi.mock("@svrooij/sonos", () => {
-  class MockSonosManager {
-    public Devices: unknown[];
-    public InitializeFromDevice = (ip: string) => managerState.initSpy(ip);
-    constructor() {
-      this.Devices = managerState.devices;
-    }
-  }
-  return { SonosManager: MockSonosManager };
-});
-
 vi.mock("./discovery-service", () => ({
   discoverSonosDevices: vi.fn(),
 }));
@@ -43,8 +24,6 @@ describe("SonosService.getDeviceByUuid", () => {
   const errorMock = streamDeck.logger.error as unknown as ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    managerState.devices = [];
-    managerState.initSpy = async () => undefined;
     discoverMock.mockReset();
     errorMock.mockReset();
 

@@ -2,7 +2,6 @@ import streamDeck, {
   action,
   KeyDownEvent,
   SingletonAction,
-  WillAppearEvent,
   type SendToPluginEvent,
 } from "@elgato/streamdeck";
 import { SonosService } from "../services/sonos-service";
@@ -12,10 +11,6 @@ import { type SonosSettings } from "../types/sonos-settings";
 @action({ UUID: "com.pavel-karpovich.sonos.previous-track" })
 export class SonosPreviousTrackAction extends SingletonAction<SonosSettings> {
   private sonosService = SonosService.getInstance();
-
-  override async onWillAppear(
-    _ev: WillAppearEvent<SonosSettings>,
-  ): Promise<void> {}
 
   override async onSendToPlugin(
     ev: SendToPluginEvent<{ action: string }, SonosSettings>,

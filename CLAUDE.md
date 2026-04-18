@@ -10,6 +10,8 @@ pnpm build         # Build plugin (rollup bundles to com.pavel-karpovich.sonos.s
 pnpm watch         # Dev mode with hot-reload (auto-restarts Stream Deck plugin)
 pnpm validate      # Validate plugin manifest
 pnpm pack          # Create .streamDeckPlugin distribution file
+pnpm test          # Run unit tests once (vitest)
+pnpm test:watch    # Run unit tests in watch mode
 ```
 
 ## Architecture
@@ -28,7 +30,9 @@ This is an Elgato Stream Deck plugin for controlling Sonos speakers. It uses:
 - `onKeyDown`/`onDialRotate`/`onTouchTap` - user interactions
 - `onWillDisappear` - cleanup intervals
 
-**Services** (`src/services/sonos-service.ts`): Singleton `SonosService` is stateless with respect to the current device — it holds only a lazily initialized `SonosManager`. Every operational method accepts a per-call `uuid` and resolves the target device via `getDeviceByUuid(uuid)` on each invocation. If the UUID is not in the manager, the resolver falls back to fresh mDNS discovery and `InitializeFromDevice(ip)`. An empty UUID defaults to `manager.Devices[0]`. This lets two actions target two different Sonos devices without cross-talk, and changing a device in the Property Inspector takes effect immediately.
+**Services** (`src/services/sonos-service.ts`): Singleton `SonosService` is stateless with respect to the current device - it holds only a lazily initialized `SonosManager`. Every operational method accepts a per-call `uuid` and resolves the target device via `getDeviceByUuid(uuid)` on each invocation. If the UUID is not in the manager, the resolver falls back to fresh mDNS discovery and `InitializeFromDevice(ip)`. An empty UUID defaults to `manager.Devices[0]`. This lets two actions target two different Sonos devices without cross-talk, and changing a device in the Property Inspector takes effect immediately.
+
+**Tests** (`src/**/*.test.ts`): Unit tests colocated with sources, run via vitest. Config at `vitest.config.ts`.
 
 **Plugin Bundle** (`com.pavel-karpovich.sonos.sdPlugin/`): Stream Deck plugin directory containing:
 - `manifest.json` - action definitions, UUIDs, icons, supported controllers
