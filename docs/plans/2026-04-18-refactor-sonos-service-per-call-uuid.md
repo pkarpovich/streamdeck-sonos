@@ -131,8 +131,8 @@ The root cause is architectural: per-action settings vs per-process device state
 
 ### Task 7: Documentation touch-up
 
-- [ ] update `CLAUDE.md` "Services" paragraph: SonosService is now stateless w.r.t. current device; per-action device resolution is by UUID on each call
-- [ ] README needs no user-facing changes (behavior matches what it already promises); add one sentence to the Troubleshooting section noting that changing the device in PI now takes effect immediately
+- [x] update `CLAUDE.md` "Services" paragraph: SonosService is now stateless w.r.t. current device; per-action device resolution is by UUID on each call
+- [x] README needs no user-facing changes (behavior matches what it already promises); add one sentence to the Troubleshooting section noting that changing the device in PI now takes effect immediately
 
 ## Technical Details
 

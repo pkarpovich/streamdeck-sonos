@@ -28,7 +28,7 @@ This is an Elgato Stream Deck plugin for controlling Sonos speakers. It uses:
 - `onKeyDown`/`onDialRotate`/`onTouchTap` - user interactions
 - `onWillDisappear` - cleanup intervals
 
-**Services** (`src/services/sonos-service.ts`): Singleton `SonosService` manages Sonos device discovery and all playback/volume operations. Auto-discovers devices or connects by IP. Preferentially selects "Arc" devices when multiple found.
+**Services** (`src/services/sonos-service.ts`): Singleton `SonosService` is stateless with respect to the current device — it holds only a lazily initialized `SonosManager`. Every operational method accepts a per-call `uuid` and resolves the target device via `getDeviceByUuid(uuid)` on each invocation. If the UUID is not in the manager, the resolver falls back to fresh mDNS discovery and `InitializeFromDevice(ip)`. An empty UUID defaults to `manager.Devices[0]`. This lets two actions target two different Sonos devices without cross-talk, and changing a device in the Property Inspector takes effect immediately.
 
 **Plugin Bundle** (`com.pavel-karpovich.sonos.sdPlugin/`): Stream Deck plugin directory containing:
 - `manifest.json` - action definitions, UUIDs, icons, supported controllers

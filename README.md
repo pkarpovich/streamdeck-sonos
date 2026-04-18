@@ -118,6 +118,7 @@ pnpm pack      # Create .streamDeckPlugin distribution file
 - **Cannot control playback**: Check that your speaker isn't grouped with another speaker that's the group coordinator
 - **Plugin not appearing**: Try restarting the Stream Deck software
 - **Device not responding**: Try re-discovering devices in the Property Inspector by clicking "Change" then "Discover"
+- **Switching a button to a different device**: Changing the device in the Property Inspector takes effect immediately - no plugin or Stream Deck restart is required
 
 ## License
 
