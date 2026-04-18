@@ -23,20 +23,16 @@ type SonosVolumeSettings = SonosSettings & {
 @action({ UUID: "com.pavel-karpovich.sonos.volume" })
 export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
   private sonosService = SonosService.getInstance();
-  private volumeStep = 2;
-  private updateInterval: NodeJS.Timeout | null = null;
+  private updateIntervals = new Map<string, NodeJS.Timeout>();
   private lastUuids = new Map<string, string | undefined>();
 
   override async onWillAppear(
     ev: WillAppearEvent<SonosVolumeSettings>,
   ): Promise<void> {
     const settings = ev.payload.settings;
-    this.lastUuids.set(ev.action.id, settings.deviceUuid);
+    const actionId = ev.action.id;
+    this.lastUuids.set(actionId, settings.deviceUuid);
     this.sonosService.rememberDevice(settings.deviceUuid, settings.ipAddress);
-
-    if (settings.volumeStep) {
-      this.volumeStep = settings.volumeStep;
-    }
 
     if (!ev.action.isDial()) return;
 
@@ -64,7 +60,10 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
       streamDeck.logger.error(`Error in onWillAppear (setTriggerDescription): ${descError}`);
     }
 
-    this.updateInterval = setInterval(async () => {
+    const existing = this.updateIntervals.get(actionId);
+    if (existing) clearInterval(existing);
+
+    const interval = setInterval(async () => {
       const latest = await ev.action.getSettings();
       const { error: refreshError } = await tryCatch(
         this.updateDialDisplay(
@@ -76,15 +75,18 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
         streamDeck.logger.error(`Error in update interval: ${refreshError}`);
       }
     }, 5000);
+    this.updateIntervals.set(actionId, interval);
   }
 
   override async onWillDisappear(
     ev: WillDisappearEvent<SonosVolumeSettings>,
   ): Promise<void> {
-    this.lastUuids.delete(ev.action.id);
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-      this.updateInterval = null;
+    const actionId = ev.action.id;
+    this.lastUuids.delete(actionId);
+    const interval = this.updateIntervals.get(actionId);
+    if (interval) {
+      clearInterval(interval);
+      this.updateIntervals.delete(actionId);
     }
   }
 
@@ -92,15 +94,12 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
     ev: DidReceiveSettingsEvent<SonosVolumeSettings>,
   ): Promise<void> {
     const settings = ev.payload.settings;
+    const actionId = ev.action.id;
     this.sonosService.rememberDevice(settings.deviceUuid, settings.ipAddress);
 
-    if (settings.volumeStep) {
-      this.volumeStep = settings.volumeStep;
-    }
-
-    const previousUuid = this.lastUuids.get(ev.action.id);
-    if (this.lastUuids.has(ev.action.id) && settings.deviceUuid === previousUuid) return;
-    this.lastUuids.set(ev.action.id, settings.deviceUuid);
+    const previousUuid = this.lastUuids.get(actionId);
+    if (this.lastUuids.has(actionId) && settings.deviceUuid === previousUuid) return;
+    this.lastUuids.set(actionId, settings.deviceUuid);
 
     if (!ev.action.isDial()) return;
 
@@ -132,7 +131,8 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
   override async onDialRotate(
     ev: DialRotateEvent<SonosVolumeSettings>,
   ): Promise<void> {
-    const adjustment = ev.payload.ticks * this.volumeStep;
+    const step = ev.payload.settings.volumeStep ?? 2;
+    const adjustment = ev.payload.ticks * step;
     const uuid = ev.payload.settings.deviceUuid;
 
     const { data: newVolume, error: adjustError } = await tryCatch(

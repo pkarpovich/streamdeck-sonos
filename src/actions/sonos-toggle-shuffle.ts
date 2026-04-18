@@ -20,14 +20,15 @@ enum ButtonState {
 @action({ UUID: "com.pavel-karpovich.sonos.shuffle" })
 export class SonosShuffleAction extends SingletonAction<SonosSettings> {
   private sonosService = SonosService.getInstance();
-  private updateInterval: NodeJS.Timeout | null = null;
+  private updateIntervals = new Map<string, NodeJS.Timeout>();
   private lastUuids = new Map<string, string | undefined>();
 
   override async onWillAppear(
     ev: WillAppearEvent<SonosSettings>,
   ): Promise<void> {
     const settings = ev.payload.settings;
-    this.lastUuids.set(ev.action.id, settings.deviceUuid);
+    const actionId = ev.action.id;
+    this.lastUuids.set(actionId, settings.deviceUuid);
     this.sonosService.rememberDevice(settings.deviceUuid, settings.ipAddress);
 
     const { error: updateError } = await tryCatch(
@@ -40,18 +41,22 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
       streamDeck.logger.error(`Error in onWillAppear (updateButtonState): ${updateError}`);
     }
 
-    this.updateInterval = setInterval(async () => {
-      const settings = await ev.action.getSettings();
+    const existing = this.updateIntervals.get(actionId);
+    if (existing) clearInterval(existing);
+
+    const interval = setInterval(async () => {
+      const latest = await ev.action.getSettings();
       const { error: refreshError } = await tryCatch(
         this.updateButtonState(
           ev.action as KeyAction<SonosSettings>,
-          settings.deviceUuid,
+          latest.deviceUuid,
         ),
       );
       if (refreshError) {
         streamDeck.logger.error(`Error in update interval: ${refreshError}`);
       }
     }, 5000);
+    this.updateIntervals.set(actionId, interval);
   }
 
   override async onDidReceiveSettings(
@@ -61,10 +66,11 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
     const uuid = settings.deviceUuid;
     this.sonosService.rememberDevice(uuid, settings.ipAddress);
 
-    const previousUuid = this.lastUuids.get(ev.action.id);
-    if (this.lastUuids.has(ev.action.id) && uuid === previousUuid) return;
+    const actionId = ev.action.id;
+    const previousUuid = this.lastUuids.get(actionId);
+    if (this.lastUuids.has(actionId) && uuid === previousUuid) return;
 
-    this.lastUuids.set(ev.action.id, uuid);
+    this.lastUuids.set(actionId, uuid);
 
     if (!ev.action.isKey()) return;
 
@@ -123,10 +129,12 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
   override async onWillDisappear(
     ev: WillDisappearEvent<SonosSettings>,
   ): Promise<void> {
-    this.lastUuids.delete(ev.action.id);
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-      this.updateInterval = null;
+    const actionId = ev.action.id;
+    this.lastUuids.delete(actionId);
+    const interval = this.updateIntervals.get(actionId);
+    if (interval) {
+      clearInterval(interval);
+      this.updateIntervals.delete(actionId);
     }
   }
 
