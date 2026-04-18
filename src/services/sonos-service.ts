@@ -181,7 +181,7 @@ export class SonosService {
   public async previousTrack(uuid?: string): Promise<boolean> {
     const device = await this.getDeviceByUuid(uuid);
     if (!device) return false;
-    const { error } = await tryCatch(device.AVTransportService.Previous());
+    const { error } = await tryCatch(device.Previous());
     if (error) {
       streamDeck.logger.error(`Failed to previous track: ${error}`);
       return false;
