@@ -28,8 +28,27 @@ describe("SonosService.getDeviceByUuid", () => {
     errorMock.mockReset();
 
     service = SonosService.getInstance();
-    (service as unknown as { manager?: unknown; managerPromise?: unknown }).manager = undefined;
-    (service as unknown as { manager?: unknown; managerPromise?: unknown }).managerPromise = undefined;
+    (
+      service as unknown as {
+        manager?: unknown;
+        managerPromise?: unknown;
+        reinitInFlight?: unknown;
+      }
+    ).manager = undefined;
+    (
+      service as unknown as {
+        manager?: unknown;
+        managerPromise?: unknown;
+        reinitInFlight?: unknown;
+      }
+    ).managerPromise = undefined;
+    (
+      service as unknown as {
+        manager?: unknown;
+        managerPromise?: unknown;
+        reinitInFlight?: unknown;
+      }
+    ).reinitInFlight = undefined;
   });
 
   it("returns device present in manager without re-discovery", async () => {
@@ -108,6 +127,38 @@ describe("SonosService.getDeviceByUuid", () => {
 
     expect(result).toBeNull();
     expect(errorMock).toHaveBeenCalled();
+  });
+
+  it("serializes concurrent slow-path re-inits", async () => {
+    const existing = { Uuid: "RINCON_AAA", Name: "Kitchen" };
+    const targetB = { Uuid: "RINCON_BBB", Name: "Living" };
+    const initSpy = vi.fn().mockImplementation(async (ip: string) => {
+      if (ip === "192.168.1.20") {
+        (
+          service as unknown as { manager: { Devices: unknown[] } }
+        ).manager.Devices.push(targetB);
+      }
+    });
+    const cancelSpy = vi.fn();
+    (service as unknown as { manager: unknown }).manager = {
+      Devices: [existing],
+      InitializeFromDevice: initSpy,
+      CancelSubscription: cancelSpy,
+    };
+    discoverMock.mockResolvedValue([
+      { uuid: "RINCON_BBB", ip: "192.168.1.20", name: "Living" },
+      { uuid: "RINCON_CCC", ip: "192.168.1.30", name: "Bedroom" },
+    ]);
+
+    const [resultB, resultC] = await Promise.all([
+      service.getDeviceByUuid("RINCON_BBB"),
+      service.getDeviceByUuid("RINCON_CCC"),
+    ]);
+
+    expect(resultB).toBe(targetB);
+    expect(resultC).toBeNull();
+    expect(initSpy).toHaveBeenCalledTimes(1);
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
   });
 
   it("recovers from a cached manager whose Devices getter throws when empty", async () => {

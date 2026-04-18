@@ -26,6 +26,7 @@ const SHUFFLE_TOGGLE_MAP: Record<string, PlayMode> = {
 export class SonosService {
   private manager?: SonosManager;
   private managerPromise?: Promise<SonosManager | null>;
+  private reinitInFlight?: Promise<void>;
   private static instance: SonosService;
 
   private constructor() {}
@@ -94,15 +95,28 @@ export class SonosService {
     const existing = manager.Devices.find((d) => d.Uuid === uuid);
     if (existing) return existing;
 
+    if (this.reinitInFlight) {
+      await this.reinitInFlight;
+      return manager.Devices.find((d) => d.Uuid === uuid) ?? null;
+    }
+
+    this.reinitInFlight = this.reinitForUuid(manager, uuid).finally(() => {
+      this.reinitInFlight = undefined;
+    });
+    await this.reinitInFlight;
+    return manager.Devices.find((d) => d.Uuid === uuid) ?? null;
+  }
+
+  private async reinitForUuid(manager: SonosManager, uuid: string): Promise<void> {
     const { data: devices, error } = await tryCatch(discoverSonosDevices());
     if (error) {
       streamDeck.logger.error(`Failed fresh discovery for uuid ${uuid}: ${error}`);
-      return null;
+      return;
     }
     const match = devices?.find((d) => d.uuid === uuid);
     if (!match) {
       streamDeck.logger.error(`Sonos device with uuid ${uuid} not found`);
-      return null;
+      return;
     }
 
     try {
@@ -118,10 +132,7 @@ export class SonosService {
       streamDeck.logger.error(
         `Failed to initialize Sonos from ${match.ip}: ${initError}`,
       );
-      return null;
     }
-
-    return manager.Devices.find((d) => d.Uuid === uuid) ?? null;
   }
 
   public async togglePlayPause(uuid?: string): Promise<boolean> {
