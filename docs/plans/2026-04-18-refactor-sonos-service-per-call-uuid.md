@@ -123,11 +123,11 @@ The root cause is architectural: per-action settings vs per-process device state
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] verify `getDeviceByUuid` is the single resolution path — `grep` confirms no remaining `this.device`, `initialize(`, `selectDeviceByUuid`, `ensureInitialized`, `sonosService.getDevice` references
-- [ ] verify every action passes `settings.deviceUuid` into every `sonosService.*` call (no zero-arg calls to operational methods)
-- [ ] run `pnpm build` — must succeed
-- [ ] run `pnpm validate` — manifest must still validate
-- [ ] run `pnpm test` — all unit tests green
+- [x] verify `getDeviceByUuid` is the single resolution path — `grep` confirms no remaining `this.device`, `initialize(`, `selectDeviceByUuid`, `ensureInitialized`, `sonosService.getDevice` references
+- [x] verify every action passes `settings.deviceUuid` into every `sonosService.*` call (no zero-arg calls to operational methods)
+- [x] run `pnpm build` — must succeed
+- [x] run `pnpm validate` — manifest must still validate
+- [x] run `pnpm test` — all unit tests green
 
 ### Task 7: Documentation touch-up
 
