@@ -4,6 +4,7 @@ import streamDeck, {
   SingletonAction,
   WillAppearEvent,
   KeyAction,
+  type DidReceiveSettingsEvent,
   type SendToPluginEvent,
 } from "@elgato/streamdeck";
 import { SonosService } from "../services/sonos-service";
@@ -19,10 +20,13 @@ enum ButtonState {
 export class SonosShuffleAction extends SingletonAction<SonosSettings> {
   private sonosService = SonosService.getInstance();
   private updateInterval: NodeJS.Timeout | null = null;
+  private lastUuid: string | undefined = undefined;
 
   override async onWillAppear(
     ev: WillAppearEvent<SonosSettings>,
   ): Promise<void> {
+    this.lastUuid = ev.payload.settings.deviceUuid;
+
     const { error: updateError } = await tryCatch(
       this.updateButtonState(
         ev.action as KeyAction<SonosSettings>,
@@ -45,6 +49,26 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
         streamDeck.logger.error(`Error in update interval: ${refreshError}`);
       }
     }, 5000);
+  }
+
+  override async onDidReceiveSettings(
+    ev: DidReceiveSettingsEvent<SonosSettings>,
+  ): Promise<void> {
+    const uuid = ev.payload.settings.deviceUuid;
+    if (uuid === this.lastUuid) return;
+
+    this.lastUuid = uuid;
+
+    if (!ev.action.isKey()) return;
+
+    const { error } = await tryCatch(
+      this.updateButtonState(ev.action, uuid),
+    );
+    if (error) {
+      streamDeck.logger.error(
+        `Error in onDidReceiveSettings (updateButtonState): ${error}`,
+      );
+    }
   }
 
   override async onSendToPlugin(

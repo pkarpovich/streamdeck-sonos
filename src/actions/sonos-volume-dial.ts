@@ -4,6 +4,7 @@ import {
   type DialDownEvent,
   type DialRotateEvent,
   type DialUpEvent,
+  type DidReceiveSettingsEvent,
   type TouchTapEvent,
   type WillAppearEvent,
   type DialAction,
@@ -23,11 +24,13 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
   private sonosService = SonosService.getInstance();
   private volumeStep = 2;
   private updateInterval: NodeJS.Timeout | null = null;
+  private lastUuid: string | undefined = undefined;
 
   override async onWillAppear(
     ev: WillAppearEvent<SonosVolumeSettings>,
   ): Promise<void> {
     const settings = ev.payload.settings;
+    this.lastUuid = settings.deviceUuid;
 
     if (settings.volumeStep) {
       this.volumeStep = settings.volumeStep;
@@ -77,6 +80,30 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
+    }
+  }
+
+  override async onDidReceiveSettings(
+    ev: DidReceiveSettingsEvent<SonosVolumeSettings>,
+  ): Promise<void> {
+    const settings = ev.payload.settings;
+
+    if (settings.volumeStep) {
+      this.volumeStep = settings.volumeStep;
+    }
+
+    if (settings.deviceUuid === this.lastUuid) return;
+    this.lastUuid = settings.deviceUuid;
+
+    if (!ev.action.isDial()) return;
+
+    const { error } = await tryCatch(
+      this.updateDialDisplay(ev.action, settings.deviceUuid),
+    );
+    if (error) {
+      streamDeck.logger.error(
+        `Error in onDidReceiveSettings (updateDialDisplay): ${error}`,
+      );
     }
   }
 

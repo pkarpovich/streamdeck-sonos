@@ -115,11 +115,11 @@ The root cause is architectural: per-action settings vs per-process device state
 
 ### Task 5: Add `onDidReceiveSettings` for live device switch
 
-- [ ] add `override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<SonosSettings>)` to all 5 actions
-- [ ] implementation: call the action's existing `updateButtonState` / `updateDialDisplay` helper with the new `settings.deviceUuid` so the button image/state immediately reflects the newly selected device (play state, volume, shuffle icon, cover art)
-- [ ] for `sonos-play-pause.ts`: reset `currentTrackUri`/`cachedCoverUrl`/`cachedCoverBase64` when uuid changes, to force cover reload
-- [ ] run `pnpm build` — must succeed
-- [ ] run `pnpm test` — must pass before Task 6
+- [x] add `override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<SonosSettings>)` to stateful actions (play-pause, volume-dial, toggle-shuffle). Skipped for next-track / prev-track: they hold no per-uuid UI state to refresh (no-op handler would be noise).
+- [x] implementation: call the action's existing `updateButtonState` / `updateDialDisplay` helper with the new `settings.deviceUuid` so the button image/state immediately reflects the newly selected device (play state, volume, shuffle icon, cover art). Guarded by `uuid === lastUuid` short-circuit so polling-triggered `getSettings()` responses don't force redundant refreshes.
+- [x] for `sonos-play-pause.ts`: reset `currentTrackUri`/`cachedCoverUrl`/`cachedCoverBase64` when uuid changes, to force cover reload
+- [x] run `pnpm build` — must succeed
+- [x] run `pnpm test` — must pass before Task 6
 
 ### Task 6: Verify acceptance criteria
 

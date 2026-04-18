@@ -1,6 +1,7 @@
 import streamDeck, {
   action,
   SingletonAction,
+  type DidReceiveSettingsEvent,
   type KeyDownEvent,
   type WillAppearEvent,
   type KeyAction,
@@ -23,10 +24,13 @@ export class SonosPlayPauseAction extends SingletonAction<SonosSettings> {
   private currentTrackUri: string | null = null;
   private cachedCoverUrl: string | null = null;
   private cachedCoverBase64: string | null = null;
+  private lastUuid: string | undefined = undefined;
 
   override async onWillAppear(
     ev: WillAppearEvent<SonosSettings>,
   ): Promise<void> {
+    this.lastUuid = ev.payload.settings.deviceUuid;
+
     const { error: updateError } = await tryCatch(
       this.updateButtonState(
         ev.action as KeyAction<SonosSettings>,
@@ -49,6 +53,29 @@ export class SonosPlayPauseAction extends SingletonAction<SonosSettings> {
         streamDeck.logger.error(`Error in update interval: ${refreshError}`);
       }
     }, 5000);
+  }
+
+  override async onDidReceiveSettings(
+    ev: DidReceiveSettingsEvent<SonosSettings>,
+  ): Promise<void> {
+    const uuid = ev.payload.settings.deviceUuid;
+    if (uuid === this.lastUuid) return;
+
+    this.lastUuid = uuid;
+    this.currentTrackUri = null;
+    this.cachedCoverUrl = null;
+    this.cachedCoverBase64 = null;
+
+    if (!ev.action.isKey()) return;
+
+    const { error } = await tryCatch(
+      this.updateButtonState(ev.action, uuid),
+    );
+    if (error) {
+      streamDeck.logger.error(
+        `Error in onDidReceiveSettings (updateButtonState): ${error}`,
+      );
+    }
   }
 
   override async onSendToPlugin(
