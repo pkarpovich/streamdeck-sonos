@@ -62,11 +62,11 @@ The root cause is architectural: per-action settings vs per-process device state
 
 ### Task 1: Add vitest test runner
 
-- [ ] add `vitest` to `devDependencies` in `package.json`
-- [ ] add `"test": "vitest run"` and `"test:watch": "vitest"` scripts (replacing the current placeholder `"test": "streamdeck -v"`)
-- [ ] create `vitest.config.ts` at repo root with node environment, `include: ["src/**/*.test.ts"]`
-- [ ] add a trivial `src/utils/tryCatch.test.ts` to verify the runner actually executes (success + thrown-error cases)
-- [ ] run `pnpm install` then `pnpm test` — must pass before Task 2
+- [x] add `vitest` to `devDependencies` in `package.json`
+- [x] add `"test": "vitest run"` and `"test:watch": "vitest"` scripts (replacing the current placeholder `"test": "streamdeck -v"`)
+- [x] create `vitest.config.ts` at repo root with node environment, `include: ["src/**/*.test.ts"]`
+- [x] add a trivial `src/utils/tryCatch.test.ts` to verify the runner actually executes (success + thrown-error cases)
+- [x] run `pnpm install` then `pnpm test` — must pass before Task 2
 
 ### Task 2: Add `getDeviceByUuid` resolver in SonosService
 
