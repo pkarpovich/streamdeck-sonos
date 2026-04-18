@@ -2,7 +2,6 @@ import streamDeck, {
   action,
   KeyDownEvent,
   SingletonAction,
-  WillAppearEvent,
   type SendToPluginEvent,
 } from "@elgato/streamdeck";
 import { SonosService } from "../services/sonos-service";
@@ -12,18 +11,6 @@ import { type SonosSettings } from "../types/sonos-settings";
 @action({ UUID: "com.pavel-karpovich.sonos.previous-track" })
 export class SonosPreviousTrackAction extends SingletonAction<SonosSettings> {
   private sonosService = SonosService.getInstance();
-
-  override async onWillAppear(
-    ev: WillAppearEvent<SonosSettings>,
-  ): Promise<void> {
-    const settings = ev.payload.settings;
-    const { error } = await tryCatch(
-      this.sonosService.initialize(settings.ipAddress, settings.deviceUuid),
-    );
-    if (error) {
-      streamDeck.logger.error(`Error in onWillAppear: ${error}`);
-    }
-  }
 
   override async onSendToPlugin(
     ev: SendToPluginEvent<{ action: string }, SonosSettings>,
@@ -47,8 +34,10 @@ export class SonosPreviousTrackAction extends SingletonAction<SonosSettings> {
   }
 
   override async onKeyDown(ev: KeyDownEvent<SonosSettings>): Promise<void> {
+    const settings = ev.payload.settings;
+    this.sonosService.rememberDevice(settings.deviceUuid, settings.ipAddress);
     const { data: success, error } = await tryCatch(
-      this.sonosService.previousTrack(),
+      this.sonosService.previousTrack(settings.deviceUuid),
     );
     if (error) {
       streamDeck.logger.error(`Error in onKeyDown: ${error}`);

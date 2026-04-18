@@ -4,7 +4,9 @@ import streamDeck, {
   SingletonAction,
   WillAppearEvent,
   KeyAction,
+  type DidReceiveSettingsEvent,
   type SendToPluginEvent,
+  type WillDisappearEvent,
 } from "@elgato/streamdeck";
 import { SonosService } from "../services/sonos-service";
 import { tryCatch } from "../utils/tryCatch";
@@ -18,35 +20,68 @@ enum ButtonState {
 @action({ UUID: "com.pavel-karpovich.sonos.shuffle" })
 export class SonosShuffleAction extends SingletonAction<SonosSettings> {
   private sonosService = SonosService.getInstance();
-  private updateInterval: NodeJS.Timeout | null = null;
+  private updateIntervals = new Map<string, NodeJS.Timeout>();
+  private lastUuids = new Map<string, string | undefined>();
 
   override async onWillAppear(
     ev: WillAppearEvent<SonosSettings>,
   ): Promise<void> {
     const settings = ev.payload.settings;
-    const { error: initError } = await tryCatch(
-      this.sonosService.initialize(settings.ipAddress, settings.deviceUuid),
-    );
-    if (initError) {
-      streamDeck.logger.error(`Error in onWillAppear (initialize): ${initError}`);
-      return;
-    }
+    const actionId = ev.action.id;
+    this.lastUuids.set(actionId, settings.deviceUuid);
+    this.sonosService.rememberDevice(settings.deviceUuid, settings.ipAddress);
 
     const { error: updateError } = await tryCatch(
-      this.updateButtonState(ev.action as KeyAction<SonosSettings>),
+      this.updateButtonState(
+        ev.action as KeyAction<SonosSettings>,
+        settings.deviceUuid,
+      ),
     );
     if (updateError) {
       streamDeck.logger.error(`Error in onWillAppear (updateButtonState): ${updateError}`);
     }
 
-    this.updateInterval = setInterval(async () => {
+    const existing = this.updateIntervals.get(actionId);
+    if (existing) clearInterval(existing);
+
+    const interval = setInterval(async () => {
+      const latest = await ev.action.getSettings();
       const { error: refreshError } = await tryCatch(
-        this.updateButtonState(ev.action as KeyAction<SonosSettings>),
+        this.updateButtonState(
+          ev.action as KeyAction<SonosSettings>,
+          latest.deviceUuid,
+        ),
       );
       if (refreshError) {
         streamDeck.logger.error(`Error in update interval: ${refreshError}`);
       }
     }, 5000);
+    this.updateIntervals.set(actionId, interval);
+  }
+
+  override async onDidReceiveSettings(
+    ev: DidReceiveSettingsEvent<SonosSettings>,
+  ): Promise<void> {
+    const settings = ev.payload.settings;
+    const uuid = settings.deviceUuid;
+    this.sonosService.rememberDevice(uuid, settings.ipAddress);
+
+    const actionId = ev.action.id;
+    const previousUuid = this.lastUuids.get(actionId);
+    if (this.lastUuids.has(actionId) && uuid === previousUuid) return;
+
+    this.lastUuids.set(actionId, uuid);
+
+    if (!ev.action.isKey()) return;
+
+    const { error } = await tryCatch(
+      this.updateButtonState(ev.action, uuid),
+    );
+    if (error) {
+      streamDeck.logger.error(
+        `Error in onDidReceiveSettings (updateButtonState): ${error}`,
+      );
+    }
   }
 
   override async onSendToPlugin(
@@ -65,8 +100,9 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
   }
 
   override async onKeyDown(ev: KeyDownEvent<SonosSettings>): Promise<void> {
+    const uuid = ev.payload.settings.deviceUuid;
     const { data: success, error: toggleError } = await tryCatch(
-      this.sonosService.toggleShuffle(),
+      this.sonosService.toggleShuffle(uuid),
     );
     if (toggleError) {
       streamDeck.logger.error(
@@ -78,7 +114,7 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
     if (success) {
       await ev.action.showOk();
       const { error: updateError } = await tryCatch(
-        this.updateButtonState(ev.action),
+        this.updateButtonState(ev.action, uuid),
       );
       if (updateError) {
         streamDeck.logger.error(
@@ -90,18 +126,24 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
     }
   }
 
-  override async onWillDisappear(): Promise<void> {
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-      this.updateInterval = null;
+  override async onWillDisappear(
+    ev: WillDisappearEvent<SonosSettings>,
+  ): Promise<void> {
+    const actionId = ev.action.id;
+    this.lastUuids.delete(actionId);
+    const interval = this.updateIntervals.get(actionId);
+    if (interval) {
+      clearInterval(interval);
+      this.updateIntervals.delete(actionId);
     }
   }
 
   private async updateButtonState(
     action: KeyAction<SonosSettings>,
+    uuid?: string,
   ): Promise<void> {
     const { data: shuffleEnabled, error: shuffleErr } = await tryCatch(
-      this.sonosService.getShuffleMode(),
+      this.sonosService.getShuffleMode(uuid),
     );
     if (shuffleErr) {
       streamDeck.logger.error(

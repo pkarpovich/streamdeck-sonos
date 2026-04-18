@@ -4,8 +4,10 @@ import {
   type DialDownEvent,
   type DialRotateEvent,
   type DialUpEvent,
+  type DidReceiveSettingsEvent,
   type TouchTapEvent,
   type WillAppearEvent,
+  type WillDisappearEvent,
   type DialAction,
   type SendToPluginEvent,
 } from "@elgato/streamdeck";
@@ -21,31 +23,26 @@ type SonosVolumeSettings = SonosSettings & {
 @action({ UUID: "com.pavel-karpovich.sonos.volume" })
 export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
   private sonosService = SonosService.getInstance();
-  private volumeStep = 2;
-  private updateInterval: NodeJS.Timeout | null = null;
+  private updateIntervals = new Map<string, NodeJS.Timeout>();
+  private lastUuids = new Map<string, string | undefined>();
 
   override async onWillAppear(
     ev: WillAppearEvent<SonosVolumeSettings>,
   ): Promise<void> {
     const settings = ev.payload.settings;
-    const { error: initError } = await tryCatch(
-      this.sonosService.initialize(settings.ipAddress, settings.deviceUuid),
-    );
-    if (initError) {
-      streamDeck.logger.error(`Error in onWillAppear (initialize): ${initError}`);
-      return;
-    }
-
-    if (settings.volumeStep) {
-      this.volumeStep = settings.volumeStep;
-    }
+    const actionId = ev.action.id;
+    this.lastUuids.set(actionId, settings.deviceUuid);
+    this.sonosService.rememberDevice(settings.deviceUuid, settings.ipAddress);
 
     if (!ev.action.isDial()) return;
 
     ev.action.setFeedbackLayout("$B1");
 
     const { error: displayError } = await tryCatch(
-      this.updateDialDisplay(ev.action as DialAction<SonosVolumeSettings>),
+      this.updateDialDisplay(
+        ev.action as DialAction<SonosVolumeSettings>,
+        settings.deviceUuid,
+      ),
     );
     if (displayError) {
       streamDeck.logger.error(`Error in onWillAppear (updateDialDisplay): ${displayError}`);
@@ -63,20 +60,56 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
       streamDeck.logger.error(`Error in onWillAppear (setTriggerDescription): ${descError}`);
     }
 
-    this.updateInterval = setInterval(async () => {
+    const existing = this.updateIntervals.get(actionId);
+    if (existing) clearInterval(existing);
+
+    const interval = setInterval(async () => {
+      const latest = await ev.action.getSettings();
       const { error: refreshError } = await tryCatch(
-        this.updateDialDisplay(ev.action as DialAction<SonosVolumeSettings>),
+        this.updateDialDisplay(
+          ev.action as DialAction<SonosVolumeSettings>,
+          latest.deviceUuid,
+        ),
       );
       if (refreshError) {
         streamDeck.logger.error(`Error in update interval: ${refreshError}`);
       }
     }, 5000);
+    this.updateIntervals.set(actionId, interval);
   }
 
-  override async onWillDisappear(): Promise<void> {
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-      this.updateInterval = null;
+  override async onWillDisappear(
+    ev: WillDisappearEvent<SonosVolumeSettings>,
+  ): Promise<void> {
+    const actionId = ev.action.id;
+    this.lastUuids.delete(actionId);
+    const interval = this.updateIntervals.get(actionId);
+    if (interval) {
+      clearInterval(interval);
+      this.updateIntervals.delete(actionId);
+    }
+  }
+
+  override async onDidReceiveSettings(
+    ev: DidReceiveSettingsEvent<SonosVolumeSettings>,
+  ): Promise<void> {
+    const settings = ev.payload.settings;
+    const actionId = ev.action.id;
+    this.sonosService.rememberDevice(settings.deviceUuid, settings.ipAddress);
+
+    const previousUuid = this.lastUuids.get(actionId);
+    if (this.lastUuids.has(actionId) && settings.deviceUuid === previousUuid) return;
+    this.lastUuids.set(actionId, settings.deviceUuid);
+
+    if (!ev.action.isDial()) return;
+
+    const { error } = await tryCatch(
+      this.updateDialDisplay(ev.action, settings.deviceUuid),
+    );
+    if (error) {
+      streamDeck.logger.error(
+        `Error in onDidReceiveSettings (updateDialDisplay): ${error}`,
+      );
     }
   }
 
@@ -98,10 +131,12 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
   override async onDialRotate(
     ev: DialRotateEvent<SonosVolumeSettings>,
   ): Promise<void> {
-    const adjustment = ev.payload.ticks * this.volumeStep;
+    const step = ev.payload.settings.volumeStep ?? 2;
+    const adjustment = ev.payload.ticks * step;
+    const uuid = ev.payload.settings.deviceUuid;
 
     const { data: newVolume, error: adjustError } = await tryCatch(
-      this.sonosService.adjustVolume(adjustment),
+      this.sonosService.adjustVolume(uuid, adjustment),
     );
     if (adjustError) {
       streamDeck.logger.error(
@@ -111,7 +146,7 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
     }
 
     const { error: displayError } = await tryCatch(
-      this.updateDialDisplay(ev.action, newVolume),
+      this.updateDialDisplay(ev.action, uuid, newVolume),
     );
     if (displayError) {
       streamDeck.logger.error(
@@ -127,8 +162,9 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
   }
 
   override async onDialUp(ev: DialUpEvent<SonosVolumeSettings>): Promise<void> {
+    const uuid = ev.payload.settings.deviceUuid;
     const { data: success, error: toggleError } = await tryCatch(
-      this.sonosService.toggleMute(),
+      this.sonosService.toggleMute(uuid),
     );
     if (toggleError) {
       streamDeck.logger.error(`Error in onDialUp (toggleMute): ${toggleError}`);
@@ -137,7 +173,7 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
 
     if (success) {
       const { error: displayError } = await tryCatch(
-        this.updateDialDisplay(ev.action),
+        this.updateDialDisplay(ev.action, uuid),
       );
       if (displayError) {
         streamDeck.logger.error(
@@ -150,8 +186,9 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
   override async onTouchTap(
     ev: TouchTapEvent<SonosVolumeSettings>,
   ): Promise<void> {
+    const uuid = ev.payload.settings.deviceUuid;
     const { error: toggleError } = await tryCatch(
-      this.sonosService.togglePlayPause(),
+      this.sonosService.togglePlayPause(uuid),
     );
     if (toggleError) {
       streamDeck.logger.error(
@@ -161,7 +198,7 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
     }
 
     const { error: displayError } = await tryCatch(
-      this.updateDialDisplay(ev.action),
+      this.updateDialDisplay(ev.action, uuid),
     );
     if (displayError) {
       streamDeck.logger.error(
@@ -172,12 +209,13 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
 
   private async updateDialDisplay(
     action: DialAction<SonosVolumeSettings>,
+    uuid?: string,
     volumeOverride?: number,
   ): Promise<void> {
     const { data: volume, error: volError } = await tryCatch(
       volumeOverride !== undefined
         ? Promise.resolve(volumeOverride)
-        : this.sonosService.getVolume(),
+        : this.sonosService.getVolume(uuid),
     );
     if (volError) {
       streamDeck.logger.error(
@@ -187,7 +225,7 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
     }
 
     const { data: isMuted, error: muteError } = await tryCatch(
-      this.sonosService.getMute(),
+      this.sonosService.getMute(uuid),
     );
     if (muteError) {
       streamDeck.logger.error(
@@ -196,7 +234,7 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
       return;
     }
 
-    const device = this.sonosService.getDevice();
+    const device = await this.sonosService.getDeviceByUuid(uuid);
     const feedback = {
       title: device?.Name ?? "Unknown Device",
       value: `${volume}%`,
