@@ -7,6 +7,7 @@ import {
   type DidReceiveSettingsEvent,
   type TouchTapEvent,
   type WillAppearEvent,
+  type WillDisappearEvent,
   type DialAction,
   type SendToPluginEvent,
 } from "@elgato/streamdeck";
@@ -24,13 +25,14 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
   private sonosService = SonosService.getInstance();
   private volumeStep = 2;
   private updateInterval: NodeJS.Timeout | null = null;
-  private lastUuid: string | undefined = undefined;
+  private lastUuids = new Map<string, string | undefined>();
 
   override async onWillAppear(
     ev: WillAppearEvent<SonosVolumeSettings>,
   ): Promise<void> {
     const settings = ev.payload.settings;
-    this.lastUuid = settings.deviceUuid;
+    this.lastUuids.set(ev.action.id, settings.deviceUuid);
+    this.sonosService.rememberDevice(settings.deviceUuid, settings.ipAddress);
 
     if (settings.volumeStep) {
       this.volumeStep = settings.volumeStep;
@@ -76,7 +78,10 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
     }, 5000);
   }
 
-  override async onWillDisappear(): Promise<void> {
+  override async onWillDisappear(
+    ev: WillDisappearEvent<SonosVolumeSettings>,
+  ): Promise<void> {
+    this.lastUuids.delete(ev.action.id);
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
@@ -87,13 +92,15 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
     ev: DidReceiveSettingsEvent<SonosVolumeSettings>,
   ): Promise<void> {
     const settings = ev.payload.settings;
+    this.sonosService.rememberDevice(settings.deviceUuid, settings.ipAddress);
 
     if (settings.volumeStep) {
       this.volumeStep = settings.volumeStep;
     }
 
-    if (settings.deviceUuid === this.lastUuid) return;
-    this.lastUuid = settings.deviceUuid;
+    const previousUuid = this.lastUuids.get(ev.action.id);
+    if (this.lastUuids.has(ev.action.id) && settings.deviceUuid === previousUuid) return;
+    this.lastUuids.set(ev.action.id, settings.deviceUuid);
 
     if (!ev.action.isDial()) return;
 

@@ -6,6 +6,7 @@ import streamDeck, {
   KeyAction,
   type DidReceiveSettingsEvent,
   type SendToPluginEvent,
+  type WillDisappearEvent,
 } from "@elgato/streamdeck";
 import { SonosService } from "../services/sonos-service";
 import { tryCatch } from "../utils/tryCatch";
@@ -20,17 +21,19 @@ enum ButtonState {
 export class SonosShuffleAction extends SingletonAction<SonosSettings> {
   private sonosService = SonosService.getInstance();
   private updateInterval: NodeJS.Timeout | null = null;
-  private lastUuid: string | undefined = undefined;
+  private lastUuids = new Map<string, string | undefined>();
 
   override async onWillAppear(
     ev: WillAppearEvent<SonosSettings>,
   ): Promise<void> {
-    this.lastUuid = ev.payload.settings.deviceUuid;
+    const settings = ev.payload.settings;
+    this.lastUuids.set(ev.action.id, settings.deviceUuid);
+    this.sonosService.rememberDevice(settings.deviceUuid, settings.ipAddress);
 
     const { error: updateError } = await tryCatch(
       this.updateButtonState(
         ev.action as KeyAction<SonosSettings>,
-        ev.payload.settings.deviceUuid,
+        settings.deviceUuid,
       ),
     );
     if (updateError) {
@@ -54,10 +57,14 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
   override async onDidReceiveSettings(
     ev: DidReceiveSettingsEvent<SonosSettings>,
   ): Promise<void> {
-    const uuid = ev.payload.settings.deviceUuid;
-    if (uuid === this.lastUuid) return;
+    const settings = ev.payload.settings;
+    const uuid = settings.deviceUuid;
+    this.sonosService.rememberDevice(uuid, settings.ipAddress);
 
-    this.lastUuid = uuid;
+    const previousUuid = this.lastUuids.get(ev.action.id);
+    if (this.lastUuids.has(ev.action.id) && uuid === previousUuid) return;
+
+    this.lastUuids.set(ev.action.id, uuid);
 
     if (!ev.action.isKey()) return;
 
@@ -113,7 +120,10 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
     }
   }
 
-  override async onWillDisappear(): Promise<void> {
+  override async onWillDisappear(
+    ev: WillDisappearEvent<SonosSettings>,
+  ): Promise<void> {
+    this.lastUuids.delete(ev.action.id);
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
