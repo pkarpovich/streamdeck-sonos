@@ -25,6 +25,7 @@ const SHUFFLE_TOGGLE_MAP: Record<string, PlayMode> = {
 
 export class SonosService {
   private manager?: SonosManager;
+  private managerPromise?: Promise<SonosManager | null>;
   private static instance: SonosService;
 
   private constructor() {}
@@ -44,7 +45,15 @@ export class SonosService {
     if (this.manager && this.manager.Devices.length > 0) {
       return this.manager;
     }
+    if (!this.managerPromise) {
+      this.managerPromise = this.initManager().finally(() => {
+        this.managerPromise = undefined;
+      });
+    }
+    return this.managerPromise;
+  }
 
+  private async initManager(): Promise<SonosManager | null> {
     const { data: devices, error } = await tryCatch(discoverSonosDevices());
     if (error) {
       streamDeck.logger.error(`Failed to discover Sonos devices: ${error}`);

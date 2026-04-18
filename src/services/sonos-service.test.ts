@@ -28,7 +28,8 @@ describe("SonosService.getDeviceByUuid", () => {
     errorMock.mockReset();
 
     service = SonosService.getInstance();
-    (service as unknown as { manager?: unknown }).manager = undefined;
+    (service as unknown as { manager?: unknown; managerPromise?: unknown }).manager = undefined;
+    (service as unknown as { manager?: unknown; managerPromise?: unknown }).managerPromise = undefined;
   });
 
   it("returns device present in manager without re-discovery", async () => {
