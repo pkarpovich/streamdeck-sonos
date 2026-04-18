@@ -42,7 +42,7 @@ export class SonosService {
   }
 
   private async ensureManager(): Promise<SonosManager | null> {
-    if (this.manager && this.manager.Devices.length > 0) {
+    if (this.manager && this.hasDevices(this.manager)) {
       return this.manager;
     }
     if (!this.managerPromise) {
@@ -51,6 +51,14 @@ export class SonosService {
       });
     }
     return this.managerPromise;
+  }
+
+  private hasDevices(manager: SonosManager): boolean {
+    try {
+      return manager.Devices.length > 0;
+    } catch {
+      return false;
+    }
   }
 
   private async initManager(): Promise<SonosManager | null> {
@@ -95,6 +103,12 @@ export class SonosService {
     if (!match) {
       streamDeck.logger.error(`Sonos device with uuid ${uuid} not found`);
       return null;
+    }
+
+    try {
+      manager.CancelSubscription();
+    } catch (cancelError) {
+      streamDeck.logger.error(`Failed to cancel prior subscription: ${cancelError}`);
     }
 
     const { error: initError } = await tryCatch(

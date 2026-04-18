@@ -53,9 +53,11 @@ describe("SonosService.getDeviceByUuid", () => {
         service as unknown as { manager: { Devices: unknown[] } }
       ).manager.Devices.push(target);
     });
+    const cancelSpy = vi.fn();
     (service as unknown as { manager: unknown }).manager = {
       Devices: [existing],
       InitializeFromDevice: initSpy,
+      CancelSubscription: cancelSpy,
     };
     discoverMock.mockResolvedValue([
       { uuid: "RINCON_BBB", ip: "192.168.1.20", name: "Living" },
@@ -65,6 +67,7 @@ describe("SonosService.getDeviceByUuid", () => {
 
     expect(result).toBe(target);
     expect(initSpy).toHaveBeenCalledWith("192.168.1.20");
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
     expect(discoverMock).toHaveBeenCalledTimes(1);
   });
 
@@ -102,6 +105,23 @@ describe("SonosService.getDeviceByUuid", () => {
     discoverMock.mockResolvedValue([]);
 
     const result = await service.getDeviceByUuid();
+
+    expect(result).toBeNull();
+    expect(errorMock).toHaveBeenCalled();
+  });
+
+  it("recovers from a cached manager whose Devices getter throws when empty", async () => {
+    const throwingManager = {
+      get Devices(): unknown[] {
+        throw new Error("No Devices available!");
+      },
+      InitializeFromDevice: vi.fn(),
+      CancelSubscription: vi.fn(),
+    };
+    (service as unknown as { manager: unknown }).manager = throwingManager;
+    discoverMock.mockResolvedValue([]);
+
+    const result = await service.getDeviceByUuid("RINCON_AAA");
 
     expect(result).toBeNull();
     expect(errorMock).toHaveBeenCalled();
