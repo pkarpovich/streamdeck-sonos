@@ -70,24 +70,24 @@ The root cause is architectural: per-action settings vs per-process device state
 
 ### Task 2: Add `getDeviceByUuid` resolver in SonosService
 
-- [ ] add private field `manager?: SonosManager` (kept), remove unused state fields later in Task 4
-- [ ] add private async method `ensureManager(seedIp?: string): Promise<SonosManager | null>`:
+- [x] add private field `manager?: SonosManager` (kept), remove unused state fields later in Task 4
+- [x] add private async method `ensureManager(seedIp?: string): Promise<SonosManager | null>`:
   - if `this.manager` already has devices, return it
   - if `seedIp` provided, `new SonosManager()` + `InitializeFromDevice(seedIp)`; assign to `this.manager`; return
   - otherwise run `discoverSonosDevices()`, pick the first result's `ip` as seed, and init as above
   - return `null` on failure, log via `streamDeck.logger.error`
-- [ ] add public async method `getDeviceByUuid(uuid?: string): Promise<SonosDevice | null>`:
+- [x] add public async method `getDeviceByUuid(uuid?: string): Promise<SonosDevice | null>`:
   - if `uuid` is empty: call `ensureManager()`; return `manager.Devices[0] ?? null` (preserves today's "no settings -> first device" behavior)
   - call `ensureManager()`; look for `manager.Devices.find(d => d.Uuid === uuid)`; return if found
   - if not found: run fresh mDNS discovery, find entry with matching uuid, call `InitializeFromDevice(entry.ip)`, then re-scan `manager.Devices`; return match or `null`
   - wrap every async boundary in `tryCatch`; log and return `null` on any failure
-- [ ] create `src/services/sonos-service.test.ts` covering `getDeviceByUuid` only, with mocks for `SonosManager` and `discoverSonosDevices`:
+- [x] create `src/services/sonos-service.test.ts` covering `getDeviceByUuid` only, with mocks for `SonosManager` and `discoverSonosDevices`:
   - device present in manager -> returns it without re-discovery
   - uuid not in manager, present in mDNS -> triggers `InitializeFromDevice` with matching IP and resolves
   - uuid missing everywhere -> returns `null`, logs error
   - no uuid provided -> returns `manager.Devices[0]`
   - no uuid AND manager has zero devices -> returns `null`
-- [ ] run `pnpm test` — must pass before Task 3
+- [x] run `pnpm test` — must pass before Task 3
 
 ### Task 3: Refactor SonosService operational methods to per-call UUID
 

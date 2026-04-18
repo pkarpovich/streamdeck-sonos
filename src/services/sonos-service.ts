@@ -57,6 +57,71 @@ export class SonosService {
     return discoverSonosDevices();
   }
 
+  private async ensureManager(seedIp?: string): Promise<SonosManager | null> {
+    if (this.manager && this.manager.Devices.length > 0) {
+      return this.manager;
+    }
+
+    let targetIp = seedIp;
+    if (!targetIp) {
+      const { data: devices, error } = await tryCatch(discoverSonosDevices());
+      if (error) {
+        streamDeck.logger.error(`Failed to discover Sonos devices: ${error}`);
+        return null;
+      }
+      if (!devices || devices.length === 0) {
+        streamDeck.logger.error("No Sonos devices found via mDNS");
+        return null;
+      }
+      targetIp = devices[0].ip;
+    }
+
+    const manager = new SonosManager();
+    const { error: initError } = await tryCatch(manager.InitializeFromDevice(targetIp));
+    if (initError) {
+      streamDeck.logger.error(`Failed to initialize Sonos manager: ${initError}`);
+      return null;
+    }
+
+    this.manager = manager;
+    return this.manager;
+  }
+
+  public async getDeviceByUuid(uuid?: string): Promise<SonosDevice | null> {
+    const manager = await this.ensureManager();
+    if (!manager) return null;
+
+    if (!uuid) {
+      return manager.Devices[0] ?? null;
+    }
+
+    const existing = manager.Devices.find((d) => d.Uuid === uuid);
+    if (existing) return existing;
+
+    const { data: devices, error } = await tryCatch(discoverSonosDevices());
+    if (error) {
+      streamDeck.logger.error(`Failed fresh discovery for uuid ${uuid}: ${error}`);
+      return null;
+    }
+    const match = devices?.find((d) => d.uuid === uuid);
+    if (!match) {
+      streamDeck.logger.error(`Sonos device with uuid ${uuid} not found`);
+      return null;
+    }
+
+    const { error: initError } = await tryCatch(
+      manager.InitializeFromDevice(match.ip),
+    );
+    if (initError) {
+      streamDeck.logger.error(
+        `Failed to initialize Sonos from ${match.ip}: ${initError}`,
+      );
+      return null;
+    }
+
+    return manager.Devices.find((d) => d.Uuid === uuid) ?? null;
+  }
+
   public selectDeviceByUuid(uuid: string): boolean {
     if (!this.manager) return false;
 
