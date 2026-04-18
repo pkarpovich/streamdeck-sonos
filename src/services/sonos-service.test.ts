@@ -50,8 +50,6 @@ describe("SonosService.getDeviceByUuid", () => {
 
     service = SonosService.getInstance();
     (service as unknown as { manager?: unknown }).manager = undefined;
-    (service as unknown as { device?: unknown }).device = undefined;
-    (service as unknown as { isInitialized: boolean }).isInitialized = false;
   });
 
   it("returns device present in manager without re-discovery", async () => {

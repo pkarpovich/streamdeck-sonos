@@ -23,15 +23,6 @@ export class SonosShuffleAction extends SingletonAction<SonosSettings> {
   override async onWillAppear(
     ev: WillAppearEvent<SonosSettings>,
   ): Promise<void> {
-    const settings = ev.payload.settings;
-    const { error: initError } = await tryCatch(
-      this.sonosService.initialize(settings.ipAddress, settings.deviceUuid),
-    );
-    if (initError) {
-      streamDeck.logger.error(`Error in onWillAppear (initialize): ${initError}`);
-      return;
-    }
-
     const { error: updateError } = await tryCatch(
       this.updateButtonState(ev.action as KeyAction<SonosSettings>),
     );

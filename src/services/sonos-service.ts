@@ -25,8 +25,6 @@ const SHUFFLE_TOGGLE_MAP: Record<string, PlayMode> = {
 
 export class SonosService {
   private manager?: SonosManager;
-  private device?: SonosDevice;
-  private isInitialized = false;
   private static instance: SonosService;
 
   private constructor() {}
@@ -36,21 +34,6 @@ export class SonosService {
       SonosService.instance = new SonosService();
     }
     return SonosService.instance;
-  }
-
-  public getDevice(): SonosDevice | undefined {
-    return this.device;
-  }
-
-  public getDevices(): SonosDevice[] {
-    return this.manager?.Devices || [];
-  }
-
-  private async ensureInitialized(): Promise<boolean> {
-    if (!this.isInitialized || !this.device) {
-      return await this.initialize();
-    }
-    return true;
   }
 
   public async discoverDevices(): Promise<DiscoveredDevice[]> {
@@ -122,159 +105,98 @@ export class SonosService {
     return manager.Devices.find((d) => d.Uuid === uuid) ?? null;
   }
 
-  public selectDeviceByUuid(uuid: string): boolean {
-    if (!this.manager) return false;
-
-    const device = this.manager.Devices.find((d) => d.Uuid === uuid);
-    if (device) {
-      this.device = device;
-      streamDeck.logger.info(`Selected Sonos device: ${device.Name}`);
-      return true;
-    }
-    return false;
-  }
-
-  public async initialize(ipAddress?: string, deviceUuid?: string): Promise<boolean> {
-    if (this.isInitialized && this.device) {
-      if (deviceUuid && this.device.Uuid !== deviceUuid) {
-        return this.selectDeviceByUuid(deviceUuid);
-      }
-      return true;
-    }
-
-    this.manager = new SonosManager();
-
-    let targetIp = ipAddress;
-    if (!targetIp) {
-      streamDeck.logger.info("No IP provided, discovering via mDNS...");
-      const devices = await this.discoverDevices();
-      const targetDevice = deviceUuid
-        ? devices.find((d) => d.uuid === deviceUuid)
-        : devices[0];
-
-      if (!targetDevice) {
-        streamDeck.logger.error("No Sonos devices found via mDNS");
-        return false;
-      }
-      targetIp = targetDevice.ip;
-    }
-
-    const initResult = await tryCatch(this.manager.InitializeFromDevice(targetIp));
-
-    if (initResult.error) {
-      streamDeck.logger.error(`Failed to initialize Sonos: ${initResult.error}`);
+  public async togglePlayPause(uuid?: string): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
+    const { error } = await tryCatch(device.TogglePlayback());
+    if (error) {
+      streamDeck.logger.error(`Failed to toggle playback: ${error}`);
       return false;
     }
-
-    if (this.manager.Devices.length === 0) {
-      streamDeck.logger.error("No Sonos devices found");
-      return false;
-    }
-
-    if (deviceUuid) {
-      this.device = this.manager.Devices.find((d) => d.Uuid === deviceUuid);
-    }
-
-    if (!this.device) {
-      this.device = this.manager.Devices[0];
-    }
-
-    streamDeck.logger.info(`Connected to Sonos device: ${this.device.Name}`);
-    this.isInitialized = true;
     return true;
   }
 
-  public async togglePlayPause(): Promise<boolean> {
-    if (!(await this.ensureInitialized())) return false;
-    const { error: toggleError } = await tryCatch(
-      this.device!.TogglePlayback(),
+  public async nextTrack(uuid?: string): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
+    const { error } = await tryCatch(device.Next());
+    if (error) {
+      streamDeck.logger.error(`Failed to next track: ${error}`);
+      return false;
+    }
+    return true;
+  }
+
+  public async previousTrack(uuid?: string): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
+    const { error } = await tryCatch(device.AVTransportService.Previous());
+    if (error) {
+      streamDeck.logger.error(`Failed to previous track: ${error}`);
+      return false;
+    }
+    return true;
+  }
+
+  public async getPlayState(uuid?: string): Promise<string> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return "STOPPED";
+    const { data: transportInfo, error } = await tryCatch(
+      device.AVTransportService.GetTransportInfo(),
     );
-    if (toggleError) {
-      streamDeck.logger.error(`Failed to toggle playback: ${toggleError}`);
-      return false;
-    }
-    return true;
-  }
-
-  public async nextTrack(): Promise<boolean> {
-    if (!(await this.ensureInitialized())) return false;
-    const { error: nextError } = await tryCatch(this.device!.Next());
-    if (nextError) {
-      streamDeck.logger.error(`Failed to next track: ${nextError}`);
-      return false;
-    }
-    return true;
-  }
-
-  public async previousTrack(): Promise<boolean> {
-    if (!(await this.ensureInitialized())) return false;
-    const { error: prevError } = await tryCatch(
-      this.device!.AVTransportService.Previous(),
-    );
-    if (prevError) {
-      streamDeck.logger.error(`Failed to previous track: ${prevError}`);
-      return false;
-    }
-    return true;
-  }
-
-  public async getPlayState(): Promise<string> {
-    if (!(await this.ensureInitialized())) return "STOPPED";
-    const { data: transportInfo, error: playStateError } = await tryCatch(
-      this.device!.AVTransportService.GetTransportInfo(),
-    );
-    if (playStateError) {
-      streamDeck.logger.error(
-        `Failed to get transport state: ${playStateError}`,
-      );
+    if (error) {
+      streamDeck.logger.error(`Failed to get transport state: ${error}`);
       return "STOPPED";
     }
     return transportInfo.CurrentTransportState;
   }
 
-  public async getVolume(): Promise<number> {
-    if (!(await this.ensureInitialized())) return 0;
-    const { data: result, error: volumeError } = await tryCatch(
-      this.device!.RenderingControlService.GetVolume({
+  public async getVolume(uuid?: string): Promise<number> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return 0;
+    const { data: result, error } = await tryCatch(
+      device.RenderingControlService.GetVolume({
         InstanceID: 0,
         Channel: "Master",
       }),
     );
-    if (volumeError) {
-      streamDeck.logger.error(`Failed to get volume: ${volumeError}`);
+    if (error) {
+      streamDeck.logger.error(`Failed to get volume: ${error}`);
       return 0;
     }
     return result.CurrentVolume;
   }
 
-  public async setVolume(volume: number): Promise<boolean> {
-    if (!(await this.ensureInitialized())) return false;
+  public async setVolume(uuid: string | undefined, volume: number): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
     const safeVolume = Math.max(0, Math.min(100, Math.round(volume)));
-    const { error: setVolumeError } = await tryCatch(
-      this.device!.RenderingControlService.SetVolume({
+    const { error } = await tryCatch(
+      device.RenderingControlService.SetVolume({
         InstanceID: 0,
         Channel: "Master",
         DesiredVolume: safeVolume,
       }),
     );
-    if (setVolumeError) {
-      streamDeck.logger.error(`Failed to set volume: ${setVolumeError}`);
+    if (error) {
+      streamDeck.logger.error(`Failed to set volume: ${error}`);
       return false;
     }
     return true;
   }
 
-  public async adjustVolume(adjustment: number): Promise<number> {
-    const currentVolume = await this.getVolume();
+  public async adjustVolume(uuid: string | undefined, adjustment: number): Promise<number> {
+    const currentVolume = await this.getVolume(uuid);
     const newVolume = Math.max(0, Math.min(100, currentVolume + adjustment));
-    const success = await this.setVolume(newVolume);
+    const success = await this.setVolume(uuid, newVolume);
     return success ? newVolume : currentVolume;
   }
 
-  public async toggleMute(): Promise<boolean> {
-    if (!(await this.ensureInitialized())) return false;
+  public async toggleMute(uuid?: string): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
     const { data: muteState, error: getMuteError } = await tryCatch(
-      this.device!.RenderingControlService.GetMute({
+      device.RenderingControlService.GetMute({
         InstanceID: 0,
         Channel: "Master",
       }),
@@ -285,7 +207,7 @@ export class SonosService {
     }
 
     const { error: setMuteError } = await tryCatch(
-      this.device!.RenderingControlService.SetMute({
+      device.RenderingControlService.SetMute({
         InstanceID: 0,
         Channel: "Master",
         DesiredMute: !muteState.CurrentMute,
@@ -298,29 +220,29 @@ export class SonosService {
     return true;
   }
 
-  public async getMute(): Promise<boolean> {
-    if (!(await this.ensureInitialized())) return false;
-    const { data: result, error: muteError } = await tryCatch(
-      this.device!.RenderingControlService.GetMute({
+  public async getMute(uuid?: string): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
+    const { data: result, error } = await tryCatch(
+      device.RenderingControlService.GetMute({
         InstanceID: 0,
         Channel: "Master",
       }),
     );
-    if (muteError) {
-      streamDeck.logger.error(`Failed to get mute state: ${muteError}`);
+    if (error) {
+      streamDeck.logger.error(`Failed to get mute state: ${error}`);
       return false;
     }
     return result.CurrentMute;
   }
 
-  public async getCurrentTrack(): Promise<CurrentTrack | null> {
-    if (!this.device) return null;
+  public async getCurrentTrack(uuid?: string): Promise<CurrentTrack | null> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return null;
 
-    const { data: state, error: stateError } = await tryCatch(
-      this.device.GetState(),
-    );
-    if (stateError || !state) {
-      streamDeck.logger.error(`Failed to get current track: ${stateError}`);
+    const { data: state, error } = await tryCatch(device.GetState());
+    if (error || !state) {
+      streamDeck.logger.error(`Failed to get current track: ${error}`);
       return null;
     }
 
@@ -336,29 +258,30 @@ export class SonosService {
     };
   }
 
-  public async getShuffleMode(): Promise<boolean> {
-    if (!(await this.ensureInitialized())) return false;
+  public async getShuffleMode(uuid?: string): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
 
-    const { data: playModeInfo, error: shuffleError } = await tryCatch(
-      this.device!.AVTransportService.GetTransportSettings({
+    const { data: playModeInfo, error } = await tryCatch(
+      device.AVTransportService.GetTransportSettings({
         InstanceID: 0,
       }),
     );
 
-    if (shuffleError) {
-      streamDeck.logger.error(`Failed to get shuffle state: ${shuffleError}`);
+    if (error) {
+      streamDeck.logger.error(`Failed to get shuffle state: ${error}`);
       return false;
     }
 
-    // PlayMode can be: "NORMAL", "REPEAT_ALL", "REPEAT_ONE", "SHUFFLE_NOREPEAT", "SHUFFLE", "SHUFFLE_REPEAT_ONE"
     return playModeInfo.PlayMode.includes("SHUFFLE");
   }
 
-  public async toggleShuffle(): Promise<boolean> {
-    if (!(await this.ensureInitialized())) return false;
+  public async toggleShuffle(uuid?: string): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
 
     const { data: settings, error: getError } = await tryCatch(
-      this.device!.AVTransportService.GetTransportSettings({ InstanceID: 0 }),
+      device.AVTransportService.GetTransportSettings({ InstanceID: 0 }),
     );
 
     if (getError) {
@@ -373,7 +296,7 @@ export class SonosService {
     }
 
     const { error: setError } = await tryCatch(
-      this.device!.AVTransportService.SetPlayMode({
+      device.AVTransportService.SetPlayMode({
         InstanceID: 0,
         NewPlayMode: newMode,
       }),

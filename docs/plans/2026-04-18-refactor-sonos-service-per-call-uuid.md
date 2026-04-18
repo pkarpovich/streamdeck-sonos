@@ -91,17 +91,17 @@ The root cause is architectural: per-action settings vs per-process device state
 
 ### Task 3: Refactor SonosService operational methods to per-call UUID
 
-- [ ] change signatures to accept `uuid?: string`:
+- [x] change signatures to accept `uuid?: string`:
   - `togglePlayPause(uuid)`, `nextTrack(uuid)`, `previousTrack(uuid)`
   - `getPlayState(uuid)`, `getCurrentTrack(uuid)`
   - `getVolume(uuid)`, `setVolume(uuid, volume)`, `adjustVolume(uuid, adjustment)`
   - `toggleMute(uuid)`, `getMute(uuid)`
   - `getShuffleMode(uuid)`, `toggleShuffle(uuid)`
-- [ ] each method replaces `this.device!` with `const device = await this.getDeviceByUuid(uuid)` and returns a safe default (false / 0 / null / "STOPPED") if device is `null`
-- [ ] keep `discoverDevices()` as-is (used by PI "Discover" button; device-agnostic)
-- [ ] delete now-unused members: `device`, `isInitialized`, `initialize`, `ensureInitialized`, `selectDeviceByUuid`, `getDevice`, `getDevices`
-- [ ] run `pnpm build` — must succeed (TS will flag any caller left behind)
-- [ ] run `pnpm test` — must pass before Task 4
+- [x] each method replaces `this.device!` with `const device = await this.getDeviceByUuid(uuid)` and returns a safe default (false / 0 / null / "STOPPED") if device is `null`
+- [x] keep `discoverDevices()` as-is (used by PI "Discover" button; device-agnostic)
+- [x] delete now-unused members: `device`, `isInitialized`, `initialize`, `ensureInitialized`, `selectDeviceByUuid`, `getDevice`, `getDevices`
+- [x] run `pnpm build` — must succeed (TS will flag any caller left behind)
+- [x] run `pnpm test` — must pass before Task 4
 
 ### Task 4: Update 5 actions to thread `settings.deviceUuid`
 

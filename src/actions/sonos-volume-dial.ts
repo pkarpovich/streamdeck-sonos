@@ -28,13 +28,6 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
     ev: WillAppearEvent<SonosVolumeSettings>,
   ): Promise<void> {
     const settings = ev.payload.settings;
-    const { error: initError } = await tryCatch(
-      this.sonosService.initialize(settings.ipAddress, settings.deviceUuid),
-    );
-    if (initError) {
-      streamDeck.logger.error(`Error in onWillAppear (initialize): ${initError}`);
-      return;
-    }
 
     if (settings.volumeStep) {
       this.volumeStep = settings.volumeStep;
@@ -101,7 +94,7 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
     const adjustment = ev.payload.ticks * this.volumeStep;
 
     const { data: newVolume, error: adjustError } = await tryCatch(
-      this.sonosService.adjustVolume(adjustment),
+      this.sonosService.adjustVolume(undefined, adjustment),
     );
     if (adjustError) {
       streamDeck.logger.error(
@@ -196,7 +189,7 @@ export class SonosVolumeAction extends SingletonAction<SonosVolumeSettings> {
       return;
     }
 
-    const device = this.sonosService.getDevice();
+    const device = await this.sonosService.getDeviceByUuid();
     const feedback = {
       title: device?.Name ?? "Unknown Device",
       value: `${volume}%`,

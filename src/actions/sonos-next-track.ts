@@ -14,16 +14,8 @@ export class SonosNextTrackAction extends SingletonAction<SonosSettings> {
   private sonosService = SonosService.getInstance();
 
   override async onWillAppear(
-    ev: WillAppearEvent<SonosSettings>,
-  ): Promise<void> {
-    const settings = ev.payload.settings;
-    const { error } = await tryCatch(
-      this.sonosService.initialize(settings.ipAddress, settings.deviceUuid),
-    );
-    if (error) {
-      streamDeck.logger.error(`Error in onWillAppear: ${error}`);
-    }
-  }
+    _ev: WillAppearEvent<SonosSettings>,
+  ): Promise<void> {}
 
   override async onSendToPlugin(
     ev: SendToPluginEvent<{ action: string }, SonosSettings>,
