@@ -102,6 +102,22 @@
 					"TitleAlignment": "middle"
 				}
 			]
+		},
+		{
+			"Name": "Play Favourite",
+			"UUID": "com.pavel-karpovich.sonos.favorite",
+			"Icon": "imgs/actions/favorite/favorite_key",
+			"Tooltip": "Play a Sonos favourite",
+			"PropertyInspectorPath": "ui/property-inspector-favorite.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/favorite/favorite_key",
+					"TitleAlignment": "middle"
+				}
+			]
 		}
 	],
 	"Category": "sonos",

@@ -302,14 +302,14 @@ the whole `SonosFavorite`. Changing the device clears the stored `favorite` and 
 **Files:**
 - Modify: `com.pavel-karpovich.sonos.sdPlugin/manifest.json`
 
-- [ ] add an `Actions` entry: `Name "Play Favourite"`, `UUID
+- [x] add an `Actions` entry: `Name "Play Favourite"`, `UUID
       "com.pavel-karpovich.sonos.favorite"`, `Icon "imgs/actions/favorite/favorite_key"`,
       `Tooltip "Play a Sonos favourite"`, per-action `PropertyInspectorPath
       "ui/property-inspector-favorite.html"`, `Controllers ["Keypad"]`, a single `States`
       entry with `Image "imgs/actions/favorite/favorite_key"` and `TitleAlignment "middle"`.
-- [ ] confirm the decorator UUID equals the manifest UUID; do not bump manifest `Version`
+- [x] confirm the decorator UUID equals the manifest UUID; do not bump manifest `Version`
       (handled at release).
-- [ ] run `pnpm validate` - manifest must pass.
+- [x] run `pnpm validate` - manifest must pass.
 
 ### Task 6: Verify acceptance criteria
 
