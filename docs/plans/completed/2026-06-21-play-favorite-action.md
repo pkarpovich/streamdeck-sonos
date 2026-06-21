@@ -326,9 +326,9 @@ the whole `SonosFavorite`. Changing the device clears the stored `favorite` and 
 - Modify: `README.md`
 - Modify: `CLAUDE.md`
 
-- [ ] add "Play Favourite Button" to README's **Available Actions** section.
-- [ ] add `com.pavel-karpovich.sonos.favorite` to the **Action UUIDs** list in `CLAUDE.md`.
-- [ ] move this plan to `docs/plans/completed/`.
+- [x] add "Play Favourite Button" to README's **Available Actions** section.
+- [x] add `com.pavel-karpovich.sonos.favorite` to the **Action UUIDs** list in `CLAUDE.md`.
+- [x] move this plan to `docs/plans/completed/`.
 
 ## Post-Completion
 

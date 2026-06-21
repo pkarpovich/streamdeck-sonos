@@ -53,6 +53,9 @@ Go back to the previous track in your queue.
 ### Shuffle Toggle Button
 Enable or disable shuffle mode for your current queue. The button will update to show the current state.
 
+### Play Favourite Button
+Assign one of your Sonos favourites (radio station, stream, single track, playlist, or album) to a button. In the Property Inspector, select a speaker, then pick a favourite from its list. The button shows the favourite's album art, and pressing it replaces the speaker's current source with that favourite and starts playback.
+
 ## Development
 
 ### Prerequisites
