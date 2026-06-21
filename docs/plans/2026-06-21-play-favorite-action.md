@@ -288,14 +288,14 @@ the whole `SonosFavorite`. Changing the device clears the stored `favorite` and 
 **Files:**
 - Create: `com.pavel-karpovich.sonos.sdPlugin/ui/property-inspector-favorite.html`
 
-- [ ] clone the device-selection block (paired/discovery views, discover round-trip,
+- [x] clone the device-selection block (paired/discovery views, discover round-trip,
       `deviceList` handling) from `ui/property-inspector.html`.
-- [ ] add a favourites `<sdpi-item>` with a `<select>`; after a device is present, send
+- [x] add a favourites `<sdpi-item>` with a `<select>`; after a device is present, send
       `{ action:'loadFavorites' }` and populate the dropdown from the `favoriteList` reply
       (option label = `favorite.title`, pre-select `selectedUri`).
-- [ ] on favourite change, `setSettings({ ...currentSettings, favorite })`; on device change,
+- [x] on favourite change, `setSettings({ ...currentSettings, favorite })`; on device change,
       clear the stored `favorite` and re-request `loadFavorites`.
-- [ ] no unit tests (PI HTML, matching repo convention); validated manually in Stream Deck.
+- [x] no unit tests (PI HTML, matching repo convention); validated manually in Stream Deck.
 
 ### Task 5: Register the action in the manifest
 
