@@ -169,12 +169,12 @@ speakers resume on the correct queue.
 **Files:**
 - Modify: `README.md`
 
-- [ ] verify the Overview behaviour: a `701` on play/pause now resumes the queue; normal
+- [x] verify the Overview behaviour: a `701` on play/pause now resumes the queue; normal
       queue toggling and non-701 failures are unchanged.
-- [ ] run `pnpm test` (green) and `pnpm build` (succeeds).
-- [ ] add a short line to README's **Troubleshooting**: pressing Play after watching TV
+- [x] run `pnpm test` (green) and `pnpm build` (succeeds).
+- [x] add a short line to README's **Troubleshooting**: pressing Play after watching TV
       switches the speaker back to your music queue.
-- [ ] move this plan to `docs/plans/completed/`.
+- [x] move this plan to `docs/plans/completed/`.
 
 ## Post-Completion
 

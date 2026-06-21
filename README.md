@@ -127,6 +127,7 @@ pnpm test:watch # Run unit tests in watch mode
 - **Plugin not appearing**: Try restarting the Stream Deck software
 - **Device not responding**: Try re-discovering devices in the Property Inspector by clicking "Change" then "Discover"
 - **Switching a button to a different device**: Changing the device in the Property Inspector takes effect immediately - no plugin or Stream Deck restart is required
+- **Play does nothing after watching TV**: When the speaker is on a non-queue source such as the TV input, pressing Play switches it back to your Sonos music queue and resumes playback
 
 ## License
 
