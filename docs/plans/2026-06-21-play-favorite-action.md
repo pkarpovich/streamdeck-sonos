@@ -267,20 +267,20 @@ the whole `SonosFavorite`. Changing the device clears the stored `favorite` and 
 - Create: `src/actions/sonos-play-favorite.ts`
 - Modify: `src/plugin.ts`
 
-- [ ] create `SonosPlayFavoriteAction extends SingletonAction<SonosFavoriteSettings>` with
+- [x] create `SonosPlayFavoriteAction extends SingletonAction<SonosFavoriteSettings>` with
       `@action({ UUID: "com.pavel-karpovich.sonos.favorite" })`, holding
       `SonosService.getInstance()`.
-- [ ] `onWillAppear` / `onDidReceiveSettings`: `rememberDevice(deviceUuid, ipAddress)` then
+- [x] `onWillAppear` / `onDidReceiveSettings`: `rememberDevice(deviceUuid, ipAddress)` then
       `renderCover(action, settings.favorite)`. No intervals, no caches.
-- [ ] `onSendToPlugin`: handle `discover` (return device list, same as existing actions) and
+- [x] `onSendToPlugin`: handle `discover` (return device list, same as existing actions) and
       `loadFavorites` (`getFavorites(uuid)` -> `sendToPropertyInspector({ action:'favoriteList',
       favorites, selectedUri: settings.favorite?.uri })`).
-- [ ] `onKeyDown`: if no `settings.favorite` -> `showAlert()`; else `playFavorite` and
+- [x] `onKeyDown`: if no `settings.favorite` -> `showAlert()`; else `playFavorite` and
       `showOk()`/`showAlert()` on the boolean result.
-- [ ] private `renderCover(action, favorite)`: return early if no `albumArtUrl`; else
+- [x] private `renderCover(action, favorite)`: return early if no `albumArtUrl`; else
       `action.setImage(await getImageAsBase64(favorite.albumArtUrl))`. Never call `setTitle`.
-- [ ] register `new SonosPlayFavoriteAction()` in `src/plugin.ts`.
-- [ ] no unit tests for the action (consistent with the repo - no action tests exist);
+- [x] register `new SonosPlayFavoriteAction()` in `src/plugin.ts`.
+- [x] no unit tests for the action (consistent with the repo - no action tests exist);
       covered by `pnpm build` + manual validation. Run `pnpm build` - must succeed.
 
 ### Task 4: Add the dedicated Property Inspector
