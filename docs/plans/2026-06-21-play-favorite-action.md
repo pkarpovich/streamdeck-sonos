@@ -313,12 +313,12 @@ the whole `SonosFavorite`. Changing the device clears the stored `favorite` and 
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] verify all Overview requirements: a favourite can be assigned per button and played;
+- [x] verify all Overview requirements: a favourite can be assigned per button and played;
       container and item favourites both handled; cover art renders; no polling/indicator.
-- [ ] verify edge cases: button with no favourite configured shows an alert on press;
+- [x] verify edge cases: button with no favourite configured shows an alert on press;
       missing album art leaves the default icon.
-- [ ] run full suite: `pnpm test` (green).
-- [ ] run `pnpm build` (succeeds) and `pnpm validate` (manifest valid).
+- [x] run full suite: `pnpm test` (green).
+- [x] run `pnpm build` (succeeds) and `pnpm validate` (manifest valid).
 
 ### Task 7: Update documentation and close the plan
 
