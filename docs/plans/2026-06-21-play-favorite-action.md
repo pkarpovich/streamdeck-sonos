@@ -227,12 +227,12 @@ the whole `SonosFavorite`. Changing the device clears the stored `favorite` and 
 - Create: `src/types/sonos-favorite.ts`
 - Modify: `src/types/sonos-settings.ts`
 
-- [ ] create `src/types/sonos-favorite.ts` exporting the `SonosFavorite` type from
+- [x] create `src/types/sonos-favorite.ts` exporting the `SonosFavorite` type from
       Technical Details (no library imports - pure domain type).
-- [ ] in `src/types/sonos-settings.ts` add `SonosFavoriteSettings = SonosSettings &
+- [x] in `src/types/sonos-settings.ts` add `SonosFavoriteSettings = SonosSettings &
       { favorite?: SonosFavorite }`, importing `SonosFavorite` (mirrors how the volume
       action extends `SonosSettings`).
-- [ ] type-only change: no runtime unit tests. Validate via `pnpm build` (tsc) - it must
+- [x] type-only change: no runtime unit tests. Validate via `pnpm build` (tsc) - it must
       compile clean. Behavioural coverage arrives with Task 2.
 
 ### Task 2: Add getFavorites + playFavorite to SonosService (with tests)
