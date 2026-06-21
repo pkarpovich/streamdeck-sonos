@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import XmlHelper from "@svrooij/sonos/lib/helpers/xml-helper";
 
 vi.mock("@elgato/streamdeck", () => ({
   default: {
@@ -17,14 +16,10 @@ vi.mock("./discovery-service", () => ({
 
 const sonosManagerInitSpy = vi.fn();
 const sonosManagerCancelSpy = vi.fn();
-const { trackToMetaDataSpy } = vi.hoisted(() => ({
-  trackToMetaDataSpy: vi.fn(() => "SENTINEL_METADATA"),
-}));
+const { axiosPostSpy } = vi.hoisted(() => ({ axiosPostSpy: vi.fn() }));
 
-vi.mock("@svrooij/sonos/lib/helpers/metadata-helper", () => ({
-  default: {
-    TrackToMetaData: trackToMetaDataSpy,
-  },
+vi.mock("axios", () => ({
+  default: { post: axiosPostSpy },
 }));
 
 vi.mock("@svrooij/sonos", () => {
@@ -289,7 +284,7 @@ describe("SonosService favorites", () => {
   beforeEach(() => {
     discoverMock.mockReset();
     errorMock.mockReset();
-    trackToMetaDataSpy.mockClear();
+    axiosPostSpy.mockReset();
 
     service = SonosService.getInstance();
     const internal = service as unknown as {
@@ -340,7 +335,7 @@ describe("SonosService favorites", () => {
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 
-  it("playFavorite item path: sets transport uri with metadata then plays, no queue calls", async () => {
+  it("playFavorite broadcast path: sets transport uri with metadata then plays, no queue calls", async () => {
     const { coordinator, removeAllSpy, addUriSpy, setUriSpy, switchSpy, playSpy } =
       makeCoordinator();
     installDevice({ Uuid: "RINCON_AAA", Coordinator: coordinator });
@@ -366,6 +361,33 @@ describe("SonosService favorites", () => {
     expect(switchSpy).not.toHaveBeenCalled();
   });
 
+  it("playFavorite track path: non-broadcast item is enqueued, not set as transport uri", async () => {
+    const { coordinator, removeAllSpy, addUriSpy, setUriSpy, switchSpy, playSpy } =
+      makeCoordinator();
+    installDevice({ Uuid: "RINCON_AAA", Coordinator: coordinator });
+
+    const favorite = {
+      uri: "x-sonos-http:track.mp3",
+      upnpClass: "object.item.audioItem.musicTrack",
+      title: "A Track",
+      metadata: "DIDL_TRACK",
+    };
+
+    const result = await service.playFavorite("RINCON_AAA", favorite);
+
+    expect(result).toBe(true);
+    expect(removeAllSpy).toHaveBeenCalledTimes(1);
+    expect(addUriSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        EnqueuedURI: favorite.uri,
+        EnqueuedURIMetaData: "DIDL_TRACK",
+      }),
+    );
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(playSpy).toHaveBeenCalledTimes(1);
+    expect(setUriSpy).not.toHaveBeenCalled();
+  });
+
   it("playFavorite returns false and logs when a transport call throws", async () => {
     const { coordinator, setUriSpy, playSpy } = makeCoordinator();
     setUriSpy.mockRejectedValue(new Error("boom"));
@@ -385,61 +407,59 @@ describe("SonosService favorites", () => {
     expect(playSpy).not.toHaveBeenCalled();
   });
 
-  it("getFavorites maps the returned Track[] to SonosFavorite[]", async () => {
-    const track = {
-      TrackUri: "uri1",
-      UpnpClass: "object.item.audioItem.audioBroadcast",
-      Title: "Fav1",
-      AlbumArtUri: "http://art1",
-      CdUdn: "udn1",
-    };
-    const getFavoritesSpy = vi.fn().mockResolvedValue({
-      Result: [track],
-      NumberReturned: 1,
-      TotalMatches: 1,
-      UpdateID: 0,
-    });
-    installDevice({ Uuid: "RINCON_AAA", GetFavorites: getFavoritesSpy });
+  it("getFavorites browses FV:2 and parses res + resMD, filtering unplayable entries", async () => {
+    const esc = (s: string) =>
+      s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+    const innerDidl =
+      '<DIDL-Lite xmlns="x"><item id="c" parentID="c" restricted="true">' +
+      "<dc:title>My Playlist</dc:title>" +
+      "<upnp:class>object.container.playlistContainer</upnp:class>" +
+      '<desc id="cdudn" nameSpace="ns">SA_RINCON_TOKEN</desc>' +
+      "</item></DIDL-Lite>";
+
+    const didl =
+      '<DIDL-Lite xmlns="x">' +
+      '<item id="FV:2/10" parentID="FV:2" restricted="false">' +
+      "<dc:title>My Playlist</dc:title>" +
+      '<res protocolInfo="x-rincon-cpcontainer:*:*:*">' +
+      "x-rincon-cpcontainer:1234?sid=9&amp;sn=2</res>" +
+      "<upnp:albumArtURI>http://art/p.jpg</upnp:albumArtURI>" +
+      `<r:resMD>${esc(innerDidl)}</r:resMD>` +
+      "</item>" +
+      '<item id="FV:2/11" parentID="FV:2" restricted="false">' +
+      "<dc:title>Radio Tile</dc:title>" +
+      '<res protocolInfo="x"></res>' +
+      "</item>" +
+      "</DIDL-Lite>";
+
+    const responseData =
+      "<s:Envelope><s:Body><u:BrowseResponse>" +
+      `<Result>${esc(didl)}</Result>` +
+      "<NumberReturned>2</NumberReturned><TotalMatches>2</TotalMatches><UpdateID>1</UpdateID>" +
+      "</u:BrowseResponse></s:Body></s:Envelope>";
+
+    axiosPostSpy.mockResolvedValue({ data: responseData });
+    installDevice({ Uuid: "RINCON_AAA", Host: "192.168.1.10" });
 
     const result = await service.getFavorites("RINCON_AAA");
 
     expect(result).toEqual([
       {
-        uri: "uri1",
-        upnpClass: "object.item.audioItem.audioBroadcast",
-        title: "Fav1",
-        albumArtUrl: "http://art1",
-        metadata: "SENTINEL_METADATA",
+        uri: "x-rincon-cpcontainer:1234?sid=9&sn=2",
+        upnpClass: "object.container.playlistContainer",
+        title: "My Playlist",
+        albumArtUrl: "http://art/p.jpg",
+        metadata: esc(innerDidl),
       },
     ]);
-    expect(trackToMetaDataSpy).toHaveBeenCalledWith(track, true, "udn1");
-  });
 
-  it("getFavorites XML-encodes the rendered DIDL metadata", async () => {
-    const rawDidl =
-      '<DIDL-Lite><item><dc:title>Rock & Roll</dc:title>' +
-      "<upnp:albumArtURI>http://art?a=1&b=2</upnp:albumArtURI></item></DIDL-Lite>";
-    trackToMetaDataSpy.mockReturnValueOnce(rawDidl);
-
-    const track = {
-      TrackUri: "uri1",
-      UpnpClass: "object.item.audioItem.audioBroadcast",
-      Title: "Fav1",
-      AlbumArtUri: "http://art1",
-      CdUdn: "udn1",
-    };
-    const getFavoritesSpy = vi.fn().mockResolvedValue({
-      Result: [track],
-      NumberReturned: 1,
-      TotalMatches: 1,
-      UpdateID: 0,
-    });
-    installDevice({ Uuid: "RINCON_AAA", GetFavorites: getFavoritesSpy });
-
-    const [favorite] = await service.getFavorites("RINCON_AAA");
-
-    expect(favorite.metadata).toBe(XmlHelper.EncodeXml(rawDidl));
-    expect(favorite.metadata).not.toContain("<DIDL-Lite>");
-    expect(favorite.metadata).not.toMatch(/&(?!amp;|lt;|gt;|quot;|apos;)/);
+    const [url] = axiosPostSpy.mock.calls[0];
+    expect(url).toContain("192.168.1.10");
+    expect(url).toContain("/MediaServer/ContentDirectory/Control");
   });
 });
