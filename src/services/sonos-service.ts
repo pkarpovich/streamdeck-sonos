@@ -25,6 +25,7 @@ const SHUFFLE_TOGGLE_MAP: Record<string, PlayMode> = {
   SHUFFLE_REPEAT_ONE: PlayMode.RepeatOne,
 };
 
+const STREAM_RADIO_SCHEME = "x-rincon-mp3radio://";
 const FAVORITES_CONTROL_PATH = "/MediaServer/ContentDirectory/Control";
 const FAVORITES_BROWSE_ACTION =
   '"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"';
@@ -519,6 +520,39 @@ export class SonosService {
     const { error: playError } = await tryCatch(coord.Play());
     if (playError) {
       streamDeck.logger.error(`Failed to play favorite: ${playError}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  public async playStream(
+    uuid: string | undefined,
+    url: string,
+  ): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
+
+    const coord = device.Coordinator;
+    const streamUri = url.startsWith(STREAM_RADIO_SCHEME)
+      ? url
+      : `${STREAM_RADIO_SCHEME}${url}`;
+
+    const { error: setUriError } = await tryCatch(
+      coord.AVTransportService.SetAVTransportURI({
+        InstanceID: 0,
+        CurrentURI: streamUri,
+        CurrentURIMetaData: "",
+      }),
+    );
+    if (setUriError) {
+      streamDeck.logger.error(`Failed to set stream uri: ${setUriError}`);
+      return false;
+    }
+
+    const { error: playError } = await tryCatch(coord.Play());
+    if (playError) {
+      streamDeck.logger.error(`Failed to play stream: ${playError}`);
       return false;
     }
 

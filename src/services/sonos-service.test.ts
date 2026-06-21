@@ -462,4 +462,53 @@ describe("SonosService favorites", () => {
     expect(url).toContain("192.168.1.10");
     expect(url).toContain("/MediaServer/ContentDirectory/Control");
   });
+
+  it("playStream wraps the url in x-rincon-mp3radio with empty metadata then plays", async () => {
+    const { coordinator, setUriSpy, playSpy, removeAllSpy, addUriSpy } =
+      makeCoordinator();
+    installDevice({ Uuid: "RINCON_AAA", Coordinator: coordinator });
+
+    const result = await service.playStream(
+      "RINCON_AAA",
+      "https://stream.example/aac",
+    );
+
+    expect(result).toBe(true);
+    expect(setUriSpy).toHaveBeenCalledWith({
+      InstanceID: 0,
+      CurrentURI: "x-rincon-mp3radio://https://stream.example/aac",
+      CurrentURIMetaData: "",
+    });
+    expect(playSpy).toHaveBeenCalledTimes(1);
+    expect(removeAllSpy).not.toHaveBeenCalled();
+    expect(addUriSpy).not.toHaveBeenCalled();
+  });
+
+  it("playStream does not double-prefix an already-schemed url", async () => {
+    const { coordinator, setUriSpy } = makeCoordinator();
+    installDevice({ Uuid: "RINCON_AAA", Coordinator: coordinator });
+
+    await service.playStream(
+      "RINCON_AAA",
+      "x-rincon-mp3radio://https://stream.example/aac",
+    );
+
+    expect(setUriSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        CurrentURI: "x-rincon-mp3radio://https://stream.example/aac",
+      }),
+    );
+  });
+
+  it("playStream returns false and logs when SetAVTransportURI throws", async () => {
+    const { coordinator, setUriSpy, playSpy } = makeCoordinator();
+    setUriSpy.mockRejectedValue(new Error("boom"));
+    installDevice({ Uuid: "RINCON_AAA", Coordinator: coordinator });
+
+    const result = await service.playStream("RINCON_AAA", "https://stream.example/aac");
+
+    expect(result).toBe(false);
+    expect(errorMock).toHaveBeenCalled();
+    expect(playSpy).not.toHaveBeenCalled();
+  });
 });

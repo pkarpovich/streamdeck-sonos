@@ -118,6 +118,22 @@
 					"TitleAlignment": "middle"
 				}
 			]
+		},
+		{
+			"Name": "Play Stream",
+			"UUID": "com.pavel-karpovich.sonos.play-stream",
+			"Icon": "imgs/actions/playstream/playstream_key",
+			"Tooltip": "Play a direct HTTP audio stream",
+			"PropertyInspectorPath": "ui/property-inspector-stream.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/playstream/playstream_key",
+					"TitleAlignment": "middle"
+				}
+			]
 		}
 	],
 	"Category": "sonos",

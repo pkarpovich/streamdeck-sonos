@@ -9,3 +9,7 @@ export type SonosSettings = {
 export type SonosFavoriteSettings = SonosSettings & {
   favorite?: SonosFavorite;
 };
+
+export type SonosStreamSettings = SonosSettings & {
+  streamUrl?: string;
+};
