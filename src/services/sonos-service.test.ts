@@ -245,6 +245,131 @@ describe("SonosService.getDeviceByUuid", () => {
   });
 });
 
+describe("SonosService.togglePlayPause", () => {
+  let service: SonosService;
+  const discoverMock = discoverSonosDevices as unknown as ReturnType<typeof vi.fn>;
+  const errorMock = streamDeck.logger.error as unknown as ReturnType<typeof vi.fn>;
+
+  function installDevice(device: Record<string, unknown>): void {
+    (service as unknown as { manager: unknown }).manager = {
+      Devices: [device],
+      InitializeFromDevice: vi.fn(),
+    };
+  }
+
+  beforeEach(() => {
+    discoverMock.mockReset();
+    errorMock.mockReset();
+
+    service = SonosService.getInstance();
+    const internal = service as unknown as {
+      manager?: unknown;
+      managerPromise?: unknown;
+      reinitInFlight?: unknown;
+      knownIps: Map<string, string>;
+    };
+    internal.manager = undefined;
+    internal.managerPromise = undefined;
+    internal.reinitInFlight = undefined;
+    internal.knownIps = new Map();
+  });
+
+  it("returns true and does not touch the queue when TogglePlayback succeeds", async () => {
+    const togglePlaybackSpy = vi.fn().mockResolvedValue(true);
+    const switchSpy = vi.fn().mockResolvedValue(true);
+    const playSpy = vi.fn().mockResolvedValue(true);
+    installDevice({
+      Uuid: "RINCON_AAA",
+      TogglePlayback: togglePlaybackSpy,
+      Coordinator: { SwitchToQueue: switchSpy, Play: playSpy },
+    });
+
+    const result = await service.togglePlayPause("RINCON_AAA");
+
+    expect(result).toBe(true);
+    expect(togglePlaybackSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).not.toHaveBeenCalled();
+    expect(playSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to coordinator SwitchToQueue then Play on a 701 error", async () => {
+    const togglePlaybackSpy = vi
+      .fn()
+      .mockRejectedValue({ UpnpErrorCode: 701 });
+    const switchSpy = vi.fn().mockResolvedValue(true);
+    const playSpy = vi.fn().mockResolvedValue(true);
+    installDevice({
+      Uuid: "RINCON_AAA",
+      TogglePlayback: togglePlaybackSpy,
+      Coordinator: { SwitchToQueue: switchSpy, Play: playSpy },
+    });
+
+    const result = await service.togglePlayPause("RINCON_AAA");
+
+    expect(result).toBe(true);
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(playSpy).toHaveBeenCalledTimes(1);
+    expect(
+      switchSpy.mock.invocationCallOrder[0],
+    ).toBeLessThan(playSpy.mock.invocationCallOrder[0]);
+  });
+
+  it("returns false and logs when SwitchToQueue fails after a 701", async () => {
+    const togglePlaybackSpy = vi
+      .fn()
+      .mockRejectedValue({ UpnpErrorCode: 701 });
+    const switchSpy = vi.fn().mockRejectedValue(new Error("boom"));
+    const playSpy = vi.fn().mockResolvedValue(true);
+    installDevice({
+      Uuid: "RINCON_AAA",
+      TogglePlayback: togglePlaybackSpy,
+      Coordinator: { SwitchToQueue: switchSpy, Play: playSpy },
+    });
+
+    const result = await service.togglePlayPause("RINCON_AAA");
+
+    expect(result).toBe(false);
+    expect(errorMock).toHaveBeenCalled();
+    expect(playSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns false and logs when Play fails after a 701", async () => {
+    const togglePlaybackSpy = vi
+      .fn()
+      .mockRejectedValue({ UpnpErrorCode: 701 });
+    const switchSpy = vi.fn().mockResolvedValue(true);
+    const playSpy = vi.fn().mockRejectedValue(new Error("boom"));
+    installDevice({
+      Uuid: "RINCON_AAA",
+      TogglePlayback: togglePlaybackSpy,
+      Coordinator: { SwitchToQueue: switchSpy, Play: playSpy },
+    });
+
+    const result = await service.togglePlayPause("RINCON_AAA");
+
+    expect(result).toBe(false);
+    expect(errorMock).toHaveBeenCalled();
+  });
+
+  it("returns false and does not switch to queue on a non-701 error", async () => {
+    const togglePlaybackSpy = vi.fn().mockRejectedValue(new Error("network down"));
+    const switchSpy = vi.fn().mockResolvedValue(true);
+    const playSpy = vi.fn().mockResolvedValue(true);
+    installDevice({
+      Uuid: "RINCON_AAA",
+      TogglePlayback: togglePlaybackSpy,
+      Coordinator: { SwitchToQueue: switchSpy, Play: playSpy },
+    });
+
+    const result = await service.togglePlayPause("RINCON_AAA");
+
+    expect(result).toBe(false);
+    expect(errorMock).toHaveBeenCalled();
+    expect(switchSpy).not.toHaveBeenCalled();
+    expect(playSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe("SonosService favorites", () => {
   let service: SonosService;
   const discoverMock = discoverSonosDevices as unknown as ReturnType<typeof vi.fn>;

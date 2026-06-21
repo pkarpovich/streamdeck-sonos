@@ -26,6 +26,7 @@ const SHUFFLE_TOGGLE_MAP: Record<string, PlayMode> = {
 };
 
 const STREAM_RADIO_SCHEME = "x-rincon-mp3radio://";
+const TRANSITION_NOT_AVAILABLE_CODE = 701;
 const FAVORITES_CONTROL_PATH = "/MediaServer/ContentDirectory/Control";
 const FAVORITES_BROWSE_ACTION =
   '"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"';
@@ -244,10 +245,28 @@ export class SonosService {
     const device = await this.getDeviceByUuid(uuid);
     if (!device) return false;
     const { error } = await tryCatch(device.TogglePlayback());
-    if (error) {
+    if (!error) return true;
+
+    const upnpErrorCode = (error as { UpnpErrorCode?: number })?.UpnpErrorCode;
+    if (upnpErrorCode !== TRANSITION_NOT_AVAILABLE_CODE) {
       streamDeck.logger.error(`Failed to toggle playback: ${error}`);
       return false;
     }
+
+    const coord = device.Coordinator;
+
+    const { error: switchError } = await tryCatch(coord.SwitchToQueue());
+    if (switchError) {
+      streamDeck.logger.error(`Failed to switch to queue: ${switchError}`);
+      return false;
+    }
+
+    const { error: playError } = await tryCatch(coord.Play());
+    if (playError) {
+      streamDeck.logger.error(`Failed to play queue: ${playError}`);
+      return false;
+    }
+
     return true;
   }
 
