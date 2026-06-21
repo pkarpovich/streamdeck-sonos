@@ -245,10 +245,13 @@
             const selectedUri = e.target.value;
             const favorite = favorites.find(f => f.uri === selectedUri);
 
+            currentSettings = { ...currentSettings };
             if (favorite) {
-                currentSettings = { ...currentSettings, favorite };
-                await streamDeckClient.setSettings(currentSettings);
+                currentSettings.favorite = favorite;
+            } else {
+                delete currentSettings.favorite;
             }
+            await streamDeckClient.setSettings(currentSettings);
         });
 
         streamDeckClient.sendToPropertyInspector.subscribe((event) => {

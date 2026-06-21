@@ -1,6 +1,7 @@
 import { SonosDevice, SonosManager } from "@svrooij/sonos";
 import { type Track, PlayMode } from "@svrooij/sonos/lib/models";
 import MetadataHelper from "@svrooij/sonos/lib/helpers/metadata-helper";
+import XmlHelper from "@svrooij/sonos/lib/helpers/xml-helper";
 import streamDeck from "@elgato/streamdeck";
 import { tryCatch } from "../utils/tryCatch";
 import type { SonosFavorite } from "../types/sonos-favorite";
@@ -369,7 +370,9 @@ export class SonosService {
       upnpClass: track.UpnpClass ?? "",
       title: track.Title ?? "",
       albumArtUrl: track.AlbumArtUri,
-      metadata: MetadataHelper.TrackToMetaData(track, true, track.CdUdn),
+      metadata: XmlHelper.EncodeXml(
+        MetadataHelper.TrackToMetaData(track, true, track.CdUdn),
+      ),
     };
   }
 

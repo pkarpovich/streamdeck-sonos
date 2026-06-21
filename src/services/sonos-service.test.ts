@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import XmlHelper from "@svrooij/sonos/lib/helpers/xml-helper";
 
 vi.mock("@elgato/streamdeck", () => ({
   default: {
@@ -412,5 +413,33 @@ describe("SonosService favorites", () => {
       },
     ]);
     expect(trackToMetaDataSpy).toHaveBeenCalledWith(track, true, "udn1");
+  });
+
+  it("getFavorites XML-encodes the rendered DIDL metadata", async () => {
+    const rawDidl =
+      '<DIDL-Lite><item><dc:title>Rock & Roll</dc:title>' +
+      "<upnp:albumArtURI>http://art?a=1&b=2</upnp:albumArtURI></item></DIDL-Lite>";
+    trackToMetaDataSpy.mockReturnValueOnce(rawDidl);
+
+    const track = {
+      TrackUri: "uri1",
+      UpnpClass: "object.item.audioItem.audioBroadcast",
+      Title: "Fav1",
+      AlbumArtUri: "http://art1",
+      CdUdn: "udn1",
+    };
+    const getFavoritesSpy = vi.fn().mockResolvedValue({
+      Result: [track],
+      NumberReturned: 1,
+      TotalMatches: 1,
+      UpdateID: 0,
+    });
+    installDevice({ Uuid: "RINCON_AAA", GetFavorites: getFavoritesSpy });
+
+    const [favorite] = await service.getFavorites("RINCON_AAA");
+
+    expect(favorite.metadata).toBe(XmlHelper.EncodeXml(rawDidl));
+    expect(favorite.metadata).not.toContain("<DIDL-Lite>");
+    expect(favorite.metadata).not.toMatch(/&(?!amp;|lt;|gt;|quot;|apos;)/);
   });
 });

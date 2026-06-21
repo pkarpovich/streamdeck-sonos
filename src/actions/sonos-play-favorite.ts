@@ -82,13 +82,18 @@ export class SonosPlayFavoriteAction extends SingletonAction<SonosFavoriteSettin
     action: KeyAction<SonosFavoriteSettings>,
     favorite?: SonosFavorite,
   ): Promise<void> {
-    if (!favorite?.albumArtUrl) return;
+    if (!favorite?.albumArtUrl) return await action.setImage();
 
     const { data, error } = await tryCatch(getImageAsBase64(favorite.albumArtUrl));
     if (error) {
       streamDeck.logger.error(`Failed to render favorite cover: ${error}`);
+      const stale = await action.getSettings();
+      if (stale.favorite?.uri === favorite.uri) await action.setImage();
       return;
     }
+
+    const current = await action.getSettings();
+    if (current.favorite?.uri !== favorite.uri) return;
 
     await action.setImage(data);
   }
