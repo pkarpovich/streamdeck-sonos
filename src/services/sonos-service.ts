@@ -1,7 +1,9 @@
 import { SonosDevice, SonosManager } from "@svrooij/sonos";
 import { type Track, PlayMode } from "@svrooij/sonos/lib/models";
+import axios from "axios";
 import streamDeck from "@elgato/streamdeck";
 import { tryCatch } from "../utils/tryCatch";
+import type { SonosFavorite } from "../types/sonos-favorite";
 import { discoverSonosDevices, type DiscoveredDevice } from "./discovery-service";
 
 export type { DiscoveredDevice } from "./discovery-service";
@@ -22,6 +24,88 @@ const SHUFFLE_TOGGLE_MAP: Record<string, PlayMode> = {
   SHUFFLE: PlayMode.RepeatAll,
   SHUFFLE_REPEAT_ONE: PlayMode.RepeatOne,
 };
+
+const STREAM_RADIO_SCHEME = "x-rincon-mp3radio://";
+const FAVORITES_CONTROL_PATH = "/MediaServer/ContentDirectory/Control";
+const FAVORITES_BROWSE_ACTION =
+  '"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"';
+
+function favoritesBrowseBody(): string {
+  return (
+    '<?xml version="1.0" encoding="utf-8"?>' +
+    '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">' +
+    '<s:Body><u:Browse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">' +
+    "<ObjectID>FV:2</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter>*</Filter>" +
+    "<StartingIndex>0</StartingIndex><RequestedCount>100</RequestedCount><SortCriteria></SortCriteria>" +
+    "</u:Browse></s:Body></s:Envelope>"
+  );
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function matchGroup(source: string, pattern: RegExp): string {
+  return source.match(pattern)?.[1] ?? "";
+}
+
+async function browseFavorites(host: string): Promise<string> {
+  const response = await axios.post(
+    `http://${host}:1400${FAVORITES_CONTROL_PATH}`,
+    favoritesBrowseBody(),
+    {
+      headers: {
+        "Content-Type": "text/xml; charset=utf-8",
+        SOAPAction: FAVORITES_BROWSE_ACTION,
+      },
+      timeout: 5000,
+    },
+  );
+
+  const result = matchGroup(
+    response.data as string,
+    /<Result>([\s\S]*?)<\/Result>/,
+  );
+  return result ? decodeXmlEntities(result) : "";
+}
+
+function parseFavorites(didl: string): SonosFavorite[] {
+  const items = didl.match(/<item[\s\S]*?<\/item>/g) ?? [];
+  const favorites: SonosFavorite[] = [];
+
+  for (const item of items) {
+    const uri = decodeXmlEntities(
+      matchGroup(item, /<res[^>]*>([\s\S]*?)<\/res>/),
+    );
+    if (!uri) continue;
+
+    const metadata = matchGroup(item, /<r:resMD>([\s\S]*?)<\/r:resMD>/);
+    const upnpClass = matchGroup(
+      decodeXmlEntities(metadata),
+      /<upnp:class>([\s\S]*?)<\/upnp:class>/,
+    );
+    const albumArtUrl = decodeXmlEntities(
+      matchGroup(item, /<upnp:albumArtURI>([\s\S]*?)<\/upnp:albumArtURI>/),
+    );
+
+    favorites.push({
+      uri,
+      upnpClass,
+      title: decodeXmlEntities(
+        matchGroup(item, /<dc:title>([\s\S]*?)<\/dc:title>/),
+      ),
+      albumArtUrl: albumArtUrl || undefined,
+      metadata,
+    });
+  }
+
+  return favorites;
+}
 
 export class SonosService {
   private manager?: SonosManager;
@@ -355,6 +439,120 @@ export class SonosService {
 
     if (setError) {
       streamDeck.logger.error(`Failed to set play mode: ${setError}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  public async getFavorites(uuid?: string): Promise<SonosFavorite[]> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return [];
+
+    const { data: didl, error } = await tryCatch(browseFavorites(device.Host));
+    if (error || !didl) {
+      streamDeck.logger.error(`Failed to get favorites: ${error}`);
+      return [];
+    }
+
+    return parseFavorites(didl);
+  }
+
+  public async playFavorite(
+    uuid: string | undefined,
+    favorite: SonosFavorite,
+  ): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
+
+    const coord = device.Coordinator;
+
+    if (favorite.upnpClass.includes("audioBroadcast")) {
+      const { error: setUriError } = await tryCatch(
+        coord.AVTransportService.SetAVTransportURI({
+          InstanceID: 0,
+          CurrentURI: favorite.uri,
+          CurrentURIMetaData: favorite.metadata,
+        }),
+      );
+      if (setUriError) {
+        streamDeck.logger.error(`Failed to set transport uri: ${setUriError}`);
+        return false;
+      }
+
+      const { error: playError } = await tryCatch(coord.Play());
+      if (playError) {
+        streamDeck.logger.error(`Failed to play favorite: ${playError}`);
+        return false;
+      }
+
+      return true;
+    }
+
+    const { error: clearError } = await tryCatch(
+      coord.AVTransportService.RemoveAllTracksFromQueue({ InstanceID: 0 }),
+    );
+    if (clearError) {
+      streamDeck.logger.error(`Failed to clear queue: ${clearError}`);
+      return false;
+    }
+
+    const { error: enqueueError } = await tryCatch(
+      coord.AVTransportService.AddURIToQueue({
+        InstanceID: 0,
+        EnqueuedURI: favorite.uri,
+        EnqueuedURIMetaData: favorite.metadata,
+        DesiredFirstTrackNumberEnqueued: 0,
+        EnqueueAsNext: false,
+      }),
+    );
+    if (enqueueError) {
+      streamDeck.logger.error(`Failed to enqueue favorite: ${enqueueError}`);
+      return false;
+    }
+
+    const { error: switchError } = await tryCatch(coord.SwitchToQueue());
+    if (switchError) {
+      streamDeck.logger.error(`Failed to switch to queue: ${switchError}`);
+      return false;
+    }
+
+    const { error: playError } = await tryCatch(coord.Play());
+    if (playError) {
+      streamDeck.logger.error(`Failed to play favorite: ${playError}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  public async playStream(
+    uuid: string | undefined,
+    url: string,
+  ): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
+
+    const coord = device.Coordinator;
+    const streamUri = url.startsWith(STREAM_RADIO_SCHEME)
+      ? url
+      : `${STREAM_RADIO_SCHEME}${url}`;
+
+    const { error: setUriError } = await tryCatch(
+      coord.AVTransportService.SetAVTransportURI({
+        InstanceID: 0,
+        CurrentURI: streamUri,
+        CurrentURIMetaData: "",
+      }),
+    );
+    if (setUriError) {
+      streamDeck.logger.error(`Failed to set stream uri: ${setUriError}`);
+      return false;
+    }
+
+    const { error: playError } = await tryCatch(coord.Play());
+    if (playError) {
+      streamDeck.logger.error(`Failed to play stream: ${playError}`);
       return false;
     }
 

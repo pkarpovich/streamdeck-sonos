@@ -47,6 +47,8 @@ UUIDs must match between `@action` decorator and `manifest.json`:
 - `com.pavel-karpovich.sonos.next-track`
 - `com.pavel-karpovich.sonos.previous-track`
 - `com.pavel-karpovich.sonos.shuffle`
+- `com.pavel-karpovich.sonos.favorite`
+- `com.pavel-karpovich.sonos.play-stream`
 
 ### Error Handling Pattern
 
