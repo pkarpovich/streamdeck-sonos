@@ -10,6 +10,10 @@ import { SonosPlayStreamAction } from "./actions/sonos-play-stream";
 
 streamDeck.logger.setLevel("warn");
 
+process.on("unhandledRejection", (reason) => {
+  streamDeck.logger.error(`Unhandled promise rejection: ${reason}`);
+});
+
 streamDeck.actions.registerAction(new SonosPlayPauseAction());
 streamDeck.actions.registerAction(new SonosVolumeAction());
 streamDeck.actions.registerAction(new SonosPreviousTrackAction());
