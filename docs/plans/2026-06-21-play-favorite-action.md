@@ -241,25 +241,25 @@ the whole `SonosFavorite`. Changing the device clears the stored `favorite` and 
 - Modify: `src/services/sonos-service.ts`
 - Modify: `src/services/sonos-service.test.ts`
 
-- [ ] import `MetadataHelper` from `@svrooij/sonos/lib/helpers/metadata-helper` and the
+- [x] import `MetadataHelper` from `@svrooij/sonos/lib/helpers/metadata-helper` and the
       `SonosFavorite` type; add the private `toFavorite(track)` mapper per Technical Details.
-- [ ] implement `getFavorites(uuid?)`: resolve device, `tryCatch(device.GetFavorites())`,
+- [x] implement `getFavorites(uuid?)`: resolve device, `tryCatch(device.GetFavorites())`,
       map `Result` through `toFavorite`, return `[]` on no-device/error (log on error).
-- [ ] implement `playFavorite(uuid, favorite)`: coordinator-routed container/item branch
+- [x] implement `playFavorite(uuid, favorite)`: coordinator-routed container/item branch
       exactly as specified in Technical Details; each transport step wrapped in `tryCatch`,
       abort + log + return `false` on first failure, return `true` on success.
-- [ ] add `vi.mock("@svrooij/sonos/lib/helpers/metadata-helper")` returning a
+- [x] add `vi.mock("@svrooij/sonos/lib/helpers/metadata-helper")` returning a
       `TrackToMetaData` that yields a known sentinel string.
-- [ ] write `playFavorite` CONTAINER test: assert call ORDER
+- [x] write `playFavorite` CONTAINER test: assert call ORDER
       `RemoveAllTracksFromQueue -> AddURIToQueue -> SwitchToQueue -> Play` on the
       coordinator, and that `AddURIToQueue` received `EnqueuedURIMetaData === favorite.metadata`.
-- [ ] write `playFavorite` ITEM test: `SetAVTransportURI` (with
+- [x] write `playFavorite` ITEM test: `SetAVTransportURI` (with
       `CurrentURIMetaData === favorite.metadata`) then `Play`; assert no queue calls.
-- [ ] write `playFavorite` error test: a throwing transport call -> returns `false` and
+- [x] write `playFavorite` error test: a throwing transport call -> returns `false` and
       `streamDeck.logger.error` was called.
-- [ ] write `getFavorites` test: a fake `GetFavorites` returning a `Track[]` maps to
+- [x] write `getFavorites` test: a fake `GetFavorites` returning a `Track[]` maps to
       `SonosFavorite[]` with the correct shape (`uri/upnpClass/title/albumArtUrl/metadata`).
-- [ ] run `pnpm test` - must pass before Task 3.
+- [x] run `pnpm test` - must pass before Task 3.
 
 ### Task 3: Add SonosPlayFavoriteAction and register it
 

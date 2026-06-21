@@ -1,7 +1,9 @@
 import { SonosDevice, SonosManager } from "@svrooij/sonos";
 import { type Track, PlayMode } from "@svrooij/sonos/lib/models";
+import MetadataHelper from "@svrooij/sonos/lib/helpers/metadata-helper";
 import streamDeck from "@elgato/streamdeck";
 import { tryCatch } from "../utils/tryCatch";
+import type { SonosFavorite } from "../types/sonos-favorite";
 import { discoverSonosDevices, type DiscoveredDevice } from "./discovery-service";
 
 export type { DiscoveredDevice } from "./discovery-service";
@@ -355,6 +357,99 @@ export class SonosService {
 
     if (setError) {
       streamDeck.logger.error(`Failed to set play mode: ${setError}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  private toFavorite(track: Track): SonosFavorite {
+    return {
+      uri: track.TrackUri ?? "",
+      upnpClass: track.UpnpClass ?? "",
+      title: track.Title ?? "",
+      albumArtUrl: track.AlbumArtUri,
+      metadata: MetadataHelper.TrackToMetaData(track, true, track.CdUdn),
+    };
+  }
+
+  public async getFavorites(uuid?: string): Promise<SonosFavorite[]> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return [];
+
+    const { data: response, error } = await tryCatch(device.GetFavorites());
+    if (error) {
+      streamDeck.logger.error(`Failed to get favorites: ${error}`);
+      return [];
+    }
+
+    if (!Array.isArray(response.Result)) return [];
+
+    return response.Result.map((track) => this.toFavorite(track));
+  }
+
+  public async playFavorite(
+    uuid: string | undefined,
+    favorite: SonosFavorite,
+  ): Promise<boolean> {
+    const device = await this.getDeviceByUuid(uuid);
+    if (!device) return false;
+
+    const coord = device.Coordinator;
+
+    if (favorite.upnpClass.startsWith("object.container")) {
+      const { error: clearError } = await tryCatch(
+        coord.AVTransportService.RemoveAllTracksFromQueue({ InstanceID: 0 }),
+      );
+      if (clearError) {
+        streamDeck.logger.error(`Failed to clear queue: ${clearError}`);
+        return false;
+      }
+
+      const { error: enqueueError } = await tryCatch(
+        coord.AVTransportService.AddURIToQueue({
+          InstanceID: 0,
+          EnqueuedURI: favorite.uri,
+          EnqueuedURIMetaData: favorite.metadata,
+          DesiredFirstTrackNumberEnqueued: 0,
+          EnqueueAsNext: false,
+        }),
+      );
+      if (enqueueError) {
+        streamDeck.logger.error(`Failed to enqueue favorite: ${enqueueError}`);
+        return false;
+      }
+
+      const { error: switchError } = await tryCatch(coord.SwitchToQueue());
+      if (switchError) {
+        streamDeck.logger.error(`Failed to switch to queue: ${switchError}`);
+        return false;
+      }
+
+      const { error: playError } = await tryCatch(coord.Play());
+      if (playError) {
+        streamDeck.logger.error(`Failed to play favorite: ${playError}`);
+        return false;
+      }
+
+      return true;
+    }
+
+    const { error: setUriError } = await tryCatch(
+      coord.AVTransportService.SetAVTransportURI({
+        InstanceID: 0,
+        CurrentURI: favorite.uri,
+        CurrentURIMetaData: favorite.metadata,
+      }),
+    );
+    if (setUriError) {
+      streamDeck.logger.error(`Failed to set transport uri: ${setUriError}`);
+      return false;
+    }
+
+    const { error: playError } = await tryCatch(coord.Play());
+    if (playError) {
+      streamDeck.logger.error(`Failed to play favorite: ${playError}`);
       return false;
     }
 

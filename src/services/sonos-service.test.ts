@@ -16,6 +16,15 @@ vi.mock("./discovery-service", () => ({
 
 const sonosManagerInitSpy = vi.fn();
 const sonosManagerCancelSpy = vi.fn();
+const { trackToMetaDataSpy } = vi.hoisted(() => ({
+  trackToMetaDataSpy: vi.fn(() => "SENTINEL_METADATA"),
+}));
+
+vi.mock("@svrooij/sonos/lib/helpers/metadata-helper", () => ({
+  default: {
+    TrackToMetaData: trackToMetaDataSpy,
+  },
+}));
 
 vi.mock("@svrooij/sonos", () => {
   function SonosManager(this: {
@@ -237,5 +246,171 @@ describe("SonosService.getDeviceByUuid", () => {
 
     expect(result).toBeNull();
     expect(errorMock).toHaveBeenCalled();
+  });
+});
+
+describe("SonosService favorites", () => {
+  let service: SonosService;
+  const discoverMock = discoverSonosDevices as unknown as ReturnType<typeof vi.fn>;
+  const errorMock = streamDeck.logger.error as unknown as ReturnType<typeof vi.fn>;
+
+  function makeCoordinator() {
+    const removeAllSpy = vi.fn().mockResolvedValue(true);
+    const addUriSpy = vi.fn().mockResolvedValue({
+      FirstTrackNumberEnqueued: 1,
+      NumTracksAdded: 1,
+      NewQueueLength: 1,
+    });
+    const setUriSpy = vi.fn().mockResolvedValue(true);
+    const switchSpy = vi.fn().mockResolvedValue(true);
+    const playSpy = vi.fn().mockResolvedValue(true);
+
+    const coordinator = {
+      AVTransportService: {
+        RemoveAllTracksFromQueue: removeAllSpy,
+        AddURIToQueue: addUriSpy,
+        SetAVTransportURI: setUriSpy,
+      },
+      SwitchToQueue: switchSpy,
+      Play: playSpy,
+    };
+
+    return { coordinator, removeAllSpy, addUriSpy, setUriSpy, switchSpy, playSpy };
+  }
+
+  function installDevice(device: Record<string, unknown>): void {
+    (service as unknown as { manager: unknown }).manager = {
+      Devices: [device],
+      InitializeFromDevice: vi.fn(),
+    };
+  }
+
+  beforeEach(() => {
+    discoverMock.mockReset();
+    errorMock.mockReset();
+    trackToMetaDataSpy.mockClear();
+
+    service = SonosService.getInstance();
+    const internal = service as unknown as {
+      manager?: unknown;
+      managerPromise?: unknown;
+      reinitInFlight?: unknown;
+      knownIps: Map<string, string>;
+    };
+    internal.manager = undefined;
+    internal.managerPromise = undefined;
+    internal.reinitInFlight = undefined;
+    internal.knownIps = new Map();
+  });
+
+  it("playFavorite container path: clears queue, enqueues with metadata, switches, plays in order", async () => {
+    const { coordinator, removeAllSpy, addUriSpy, setUriSpy, switchSpy, playSpy } =
+      makeCoordinator();
+    installDevice({ Uuid: "RINCON_AAA", Coordinator: coordinator });
+
+    const favorite = {
+      uri: "x-rincon-cpcontainer:1234",
+      upnpClass: "object.container.playlistContainer",
+      title: "My Playlist",
+      albumArtUrl: "http://art",
+      metadata: "DIDL_PLAYLIST",
+    };
+
+    const result = await service.playFavorite("RINCON_AAA", favorite);
+
+    expect(result).toBe(true);
+    expect(removeAllSpy).toHaveBeenCalledWith({ InstanceID: 0 });
+    expect(addUriSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        EnqueuedURI: favorite.uri,
+        EnqueuedURIMetaData: "DIDL_PLAYLIST",
+      }),
+    );
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(playSpy).toHaveBeenCalledTimes(1);
+    expect(setUriSpy).not.toHaveBeenCalled();
+
+    const order = [
+      removeAllSpy.mock.invocationCallOrder[0],
+      addUriSpy.mock.invocationCallOrder[0],
+      switchSpy.mock.invocationCallOrder[0],
+      playSpy.mock.invocationCallOrder[0],
+    ];
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it("playFavorite item path: sets transport uri with metadata then plays, no queue calls", async () => {
+    const { coordinator, removeAllSpy, addUriSpy, setUriSpy, switchSpy, playSpy } =
+      makeCoordinator();
+    installDevice({ Uuid: "RINCON_AAA", Coordinator: coordinator });
+
+    const favorite = {
+      uri: "x-sonosapi-stream:radio",
+      upnpClass: "object.item.audioItem.audioBroadcast",
+      title: "Radio",
+      metadata: "DIDL_RADIO",
+    };
+
+    const result = await service.playFavorite("RINCON_AAA", favorite);
+
+    expect(result).toBe(true);
+    expect(setUriSpy).toHaveBeenCalledWith({
+      InstanceID: 0,
+      CurrentURI: favorite.uri,
+      CurrentURIMetaData: "DIDL_RADIO",
+    });
+    expect(playSpy).toHaveBeenCalledTimes(1);
+    expect(removeAllSpy).not.toHaveBeenCalled();
+    expect(addUriSpy).not.toHaveBeenCalled();
+    expect(switchSpy).not.toHaveBeenCalled();
+  });
+
+  it("playFavorite returns false and logs when a transport call throws", async () => {
+    const { coordinator, setUriSpy, playSpy } = makeCoordinator();
+    setUriSpy.mockRejectedValue(new Error("boom"));
+    installDevice({ Uuid: "RINCON_AAA", Coordinator: coordinator });
+
+    const favorite = {
+      uri: "x-sonosapi-stream:radio",
+      upnpClass: "object.item.audioItem.audioBroadcast",
+      title: "Radio",
+      metadata: "DIDL_RADIO",
+    };
+
+    const result = await service.playFavorite("RINCON_AAA", favorite);
+
+    expect(result).toBe(false);
+    expect(errorMock).toHaveBeenCalled();
+    expect(playSpy).not.toHaveBeenCalled();
+  });
+
+  it("getFavorites maps the returned Track[] to SonosFavorite[]", async () => {
+    const track = {
+      TrackUri: "uri1",
+      UpnpClass: "object.item.audioItem.audioBroadcast",
+      Title: "Fav1",
+      AlbumArtUri: "http://art1",
+      CdUdn: "udn1",
+    };
+    const getFavoritesSpy = vi.fn().mockResolvedValue({
+      Result: [track],
+      NumberReturned: 1,
+      TotalMatches: 1,
+      UpdateID: 0,
+    });
+    installDevice({ Uuid: "RINCON_AAA", GetFavorites: getFavoritesSpy });
+
+    const result = await service.getFavorites("RINCON_AAA");
+
+    expect(result).toEqual([
+      {
+        uri: "uri1",
+        upnpClass: "object.item.audioItem.audioBroadcast",
+        title: "Fav1",
+        albumArtUrl: "http://art1",
+        metadata: "SENTINEL_METADATA",
+      },
+    ]);
+    expect(trackToMetaDataSpy).toHaveBeenCalledWith(track, true, "udn1");
   });
 });
